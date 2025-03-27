@@ -48,3 +48,7 @@ Thumbs.db
 # Secrets
 config.yaml
 secrets.json
+
+
+input.csv
+windsurf.json
