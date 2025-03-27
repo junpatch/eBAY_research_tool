@@ -1,10 +1,13 @@
 # eBay Research Tool Dependencies
+# Python >= 3.8, < 3.12
 
 # Web Automation
 playwright==1.40.0
 
 # Data Processing
+numpy==1.24.3  # Explicitly set NumPy version for compatibility
 pandas==2.1.1
+pyyaml==6.0.2
 openpyxl==3.1.2  # Excel support for pandas
 
 # Database
