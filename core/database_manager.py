@@ -1,4 +1,4 @@
-# u30c7u30fcu30bfu30d9u30fcu30b9u30deu30cdu30fcu30b8u30e3u30fcu30afu30e9u30b9
+# データベースマネージャークラス
 
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker, scoped_session
@@ -10,31 +10,30 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
-    """u30c7u30fcu30bfu30d9u30fcu30b9u63a5u7d9au3068u64cdu4f5cu3092u7ba1u7406u3059u308bu30afu30e9u30b9"""
+    """データベースマネージャー"""
     
     def __init__(self, db_url, echo=False):
         """
-        u30c7u30fcu30bfu30d9u30fcu30b9u30deu30cdu30fcu30b8u30e3u30fcu306eu521du671fu5316
+        データベースの初期化
         
         Args:
-            db_url (str): u30c7u30fcu30bfu30d9u30fcu30b9u63a5u7d9aURL
-            echo (bool): SQLu51fau529bu3092u6709u52b9u306bu3059u308bu304bu3069u3046u304buff08u30c7u30d0u30c3u30b0u7528uff09
+            db_url (str): データベースURL
+            echo (bool): SQLの出力を有効にするかどうか
         """
         self.engine = create_engine(db_url, echo=echo)
         self.SessionFactory = sessionmaker(bind=self.engine)
         self.Session = scoped_session(self.SessionFactory)
         
     def create_tables(self):
-        """u30c7u30fcu30bfu30d9u30fcu30b9u30c6u30fcu30d6u30ebu3092u4f5cu6210u3059u308b"""
+        """テーブルの作成"""
         Base.metadata.create_all(self.engine)
-        logger.info("u30c7u30fcu30bfu30d9u30fcu30b9u30c6u30fcu30d6u30ebu3092u4f5cu6210u3057u307eu3057u305f")
+        logger.info("テーブルを初期化しました。")
     
     @contextmanager
     def session_scope(self):
+        """セッションの管理"""
         """
-        u30bbu30c3u30b7u30e7u30f3u3092u30b3u30f3u30c6u30adu30b9u30c8u30deu30cdu30fcu30b8u30e3u30fcu306bu3088u308au7ba1u7406u3059u308bu6a5fu80fd
-        
-        u4f8b: 
+        使用例:
             with db_manager.session_scope() as session:
                 session.add(object)
         """
@@ -44,25 +43,25 @@ class DatabaseManager:
             session.commit()
         except Exception as e:
             session.rollback()
-            logger.error(f"u30c7u30fcu30bfu30d9u30fcu30b9u30bbu30c3u30b7u30e7u30f3u30a8u30e9u30fc: {e}")
+            logger.error(f"セッション管理中にエラーが発生しました: {e}")
             raise
         finally:
             session.close()
     
-    # u30adu30fcu30efu30fcu30c9u7ba1u7406u30e1u30bdu30c3u30c9
+    # キーワードの管理
     def add_keyword(self, keyword, category=None):
         """
-        u65b0u3057u3044u30adu30fcu30efu30fcu30c9u3092u8ffdu52a0u3059u308b
+        新しいキーワードを追加する
         
         Args:
-            keyword (str): u691cu7d22u30adu30fcu30efu30fcu30c9
-            category (str, optional): u30abu30c6u30b4u30eau306eu6307u5b9auff08u4efbu610fuff09
+            keyword (str): キーワード
+            category (str, optional): カテゴリ
             
         Returns:
-            Keyword: u8ffdu52a0u3055u308cu305fu30adu30fcu30efu30fcu30c9u30aau30d6u30b8u30a7u30afu30c8
+            Keyword: 新しく追加されたキーワード
         """
         with self.session_scope() as session:
-            # u540cu3058u30adu30fcu30efu30fcu30c9u304cu5b58u5728u3059u308bu304bu30c1u30a7u30c3u30af
+            # 既存のキーワードを確認
             existing = session.query(Keyword).filter(Keyword.keyword == keyword).first()
             if existing:
                 return existing
@@ -77,24 +76,24 @@ class DatabaseManager:
     
     def add_keywords_bulk(self, keywords):
         """
-        u8907u6570u306eu30adu30fcu30efu30fcu30c9u3092u4e00u62ecu3067u8ffdu52a0u3059u308b
+        複数のキーワードを一括で追加する
         
         Args:
-            keywords (list): u8ffdu52a0u3059u308bu30adu30fcu30efu30fcu30c9u306eu30eau30b9u30c8u3002u5404u8981u7d20u306fu6587u5b57u5217u307eu305fu306f(keyword, category)u306eu30bfu30d7u30eb
+            keywords (list): 新しく追加するキーワードのリスト
             
         Returns:
-            int: u8ffdu52a0u3055u308cu305fu30adu30fcu30efu30fcu30c9u306eu6570
+            int: 新しく追加されたキーワードの数
         """
         added_count = 0
         with self.session_scope() as session:
             for item in keywords:
-                # u30adu30fcu30efu30fcu30c9u304cu6587u5b57u5217u304bu30bfu30d7u30ebu304bu5224u5b9a
+                # キーワードとカテゴリを確認
                 if isinstance(item, tuple) and len(item) >= 2:
                     keyword, category = item[0], item[1]
                 else:
                     keyword, category = item, None
                     
-                # u540cu3058u30adu30fcu30efu30fcu30c9u304cu5b58u5728u3059u308bu304bu30c1u30a7u30c3u30af
+                # 既存のキーワードを確認
                 existing = session.query(Keyword).filter(Keyword.keyword == keyword).first()
                 if not existing:
                     new_keyword = Keyword(
@@ -109,14 +108,14 @@ class DatabaseManager:
     
     def get_keywords(self, status='active', limit=None):
         """
-        u30adu30fcu30efu30fcu30c9u3092u53d6u5f97u3059u308b
+        キーワードを取得する
         
         Args:
-            status (str): u53d6u5f97u3059u308bu30adu30fcu30efu30fcu30c9u306eu30b9u30c6u30fcu30bfu30b9
-            limit (int, optional): u53d6u5f97u3059u308bu30adu30fcu30efu30fcu30c9u306eu6700u5927u6570
+            status (str): 取得するキーワードの状態 ('active', 'completed', 'failed')
+            limit (int, optional): 取得するキーワードの最大数
             
         Returns:
-            list: u30adu30fcu30efu30fcu30c9u30aau30d6u30b8u30a7u30afu30c8u306eu30eau30b9u30c8
+            list: 取得したキーワードのリスト
         """
         with self.session_scope() as session:
             query = session.query(Keyword).filter(Keyword.status == status)
@@ -124,32 +123,32 @@ class DatabaseManager:
                 query = query.limit(limit)
             return query.all()
     
-    # u691cu7d22u7d50u679cu7ba1u7406u30e1u30bdu30c3u30c9
+    # 検索結果の保存
     def save_search_results(self, keyword_id, results):
         """
-        u691cu7d22u7d50u679cu3092u4fddu5b58u3059u308b
+        検索結果を保存する
         
         Args:
-            keyword_id (int): u30adu30fcu30efu30fcu30c9ID
-            results (list): u691cu7d22u7d50u679cu306eu30c7u30a3u30afu30b7u30e7u30cau30eau30eau30b9u30c8
+            keyword_id (int): キーワードID
+            results (list): 検索結果のリスト
             
         Returns:
-            int: u4fddu5b58u3055u308cu305fu7d50u679cu306eu6570
+            int: 保存した検索結果の数
         """
         if not results:
             return 0
             
         with self.session_scope() as session:
-            # u8a72u5f53u30adu30fcu30efu30fcu30c9u306eu6700u7d42u691cu7d22u65e5u6642u3092u66f4u65b0
+            # 更新日時を更新
             keyword = session.query(Keyword).filter(Keyword.id == keyword_id).first()
             if keyword:
                 keyword.last_searched_at = datetime.utcnow()
                 
-            # u691cu7d22u7d50u679cu3092u4fddu5b58
+            # 検索結果を保存
             search_results = []
             for result in results:
                 item_id = result.get('item_id', '')
-                # u540cu3058item_idu304cu3042u308cu3070u30b9u30adu30c3u30d7uff08u91cdu8907u56deu907fuff09
+                # 既存の検索結果を確認
                 if item_id and not session.query(EbaySearchResult).filter(
                     EbaySearchResult.keyword_id == keyword_id,
                     EbaySearchResult.item_id == item_id
@@ -180,16 +179,16 @@ class DatabaseManager:
                 
             return len(search_results)
     
-    # u691cu7d22u5c65u6b74u7ba1u7406u30e1u30bdu30c3u30c9
+    # 検索ジョブの開始
     def start_search_job(self, total_keywords):
         """
-        u691cu7d22u30b8u30e7u30d6u3092u958bu59cbu3057u3001u5c65u6b74u3092u8a18u9332u3059u308b
+        検索ジョブを開始する
         
         Args:
-            total_keywords (int): u51e6u7406u3059u308bu30adu30fcu30efu30fcu30c9u306eu7dcfu6570
+            total_keywords (int): 検索するキーワードの総数
             
         Returns:
-            int: u691cu7d22u5c65u6b74ID
+            int: 検索ジョブID
         """
         with self.session_scope() as session:
             history = SearchHistory(
@@ -198,25 +197,25 @@ class DatabaseManager:
                 status='in_progress'
             )
             session.add(history)
-            session.flush()  # IDu3092u53d6u5f97u3059u308bu305fu3081u306bflush
+            session.flush()  # IDを取得
             return history.id
     
     def update_search_job_status(self, job_id, processed=None, successful=None, failed=None, status=None, error=None):
         """
-        u691cu7d22u30b8u30e7u30d6u306eu30b9u30c6u30fcu30bfu30b9u3092u66f4u65b0u3059u308b
+        検索ジョブの状態を更新する
         
         Args:
-            job_id (int): u691cu7d22u5c65u6b74ID
-            processed (int, optional): u51e6u7406u3057u305fu30adu30fcu30efu30fcu30c9u6570
-            successful (int, optional): u6210u529fu3057u305fu30adu30fcu30efu30fcu30c9u6570
-            failed (int, optional): u5931u6557u3057u305fu30adu30fcu30efu30fcu30c9u6570
-            status (str, optional): u65b0u3057u3044u30b9u30c6u30fcu30bfu30b9
-            error (str, optional): u30a8u30e9u30fcu30e1u30c3u30bbu30fcu30b8
+            job_id (int): 検索ジョブID
+            processed (int, optional): 検索したキーワード数
+            successful (int, optional): 成功したキーワード数
+            failed (int, optional): 失敗したキーワード数
+            status (str, optional): 更新する状態 ('in_progress', 'completed', 'failed')
+            error (str, optional): エラー情報
         """
         with self.session_scope() as session:
             job = session.query(SearchHistory).filter(SearchHistory.id == job_id).first()
             if not job:
-                logger.error(f"u691cu7d22u30b8u30e7u30d6ID {job_id} u304cu898bu3064u304bu308au307eu305bu3093")
+                logger.error(f"検索ジョブID {job_id} が見つかりません")
                 return
                 
             if processed is not None:
@@ -233,7 +232,7 @@ class DatabaseManager:
                 if status in ['completed', 'failed']:
                     job.end_time = datetime.utcnow()
                     
-                    # u5b9fu884cu6642u9593u3092u8a08u7b97
+                    # 実行時間の計算
                     if job.start_time:
                         delta = job.end_time - job.start_time
                         job.execution_time_seconds = delta.total_seconds()

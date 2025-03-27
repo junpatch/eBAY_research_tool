@@ -1,4 +1,4 @@
-# u30adu30fcu30efu30fcu30c9u7ba1u7406u30afu30e9u30b9
+# キーワード管理サービス
 
 import pandas as pd
 import csv
@@ -15,65 +15,65 @@ logger = logging.getLogger(__name__)
 
 class KeywordManager:
     """
-    u691cu7d22u30adu30fcu30efu30fcu30c9u306eu7ba1u7406u3092u884cu3046u30afu30e9u30b9
-    CSV, Excelu30d5u30a1u30a4u30eb, Google Spreadsheetsu304bu3089u306eu30adu30fcu30efu30fcu30c9u53d6u5f97u3092u30b5u30ddu30fcu30c8
+    キーワード管理サービス
+    CSV, Excel, Google Spreadsheetsからキーワードをインポート
     """
     
     def __init__(self, database_manager, config_manager):
         """
-        u30adu30fcu30efu30fcu30c9u30deu30cdu30fcu30b8u30e3u30fcu306eu521du671fu5316
+        キーワード管理サービスの初期化
         
         Args:
-            database_manager: u30c7u30fcu30bfu30d9u30fcu30b9u30deu30cdu30fcu30b8u30e3u30fcinstanceu
-            config_manager: u8a2du5b9au30deu30cdu30fcu30b8u30e3u30fcinstance
+            database_manager: データベース管理サービスのインスタンス
+            config_manager: 設定管理サービスのインスタンス
         """
         self.db = database_manager
         self.config = config_manager
         
     def import_from_csv(self, file_path, keyword_column="keyword", category_column=None, has_header=True):
         """
-        CSVu30d5u30a1u30a4u30ebu304bu3089u30adu30fcu30efu30fcu30c9u3092u30a4u30f3u30ddu30fcu30c8u3059u308b
+        CSVファイルからキーワードをインポート
         
         Args:
-            file_path (str): CSVu30d5u30a1u30a4u30ebu30d1u30b9
-            keyword_column (str): u30adu30fcu30efu30fcu30c9u304cu683cu7d0du3055u308cu3066u3044u308bu30abu30e9u30e0u540du307eu305fu306fu30a4u30f3u30c7u30c3u30afu30b9
-            category_column (str, optional): u30abu30c6u30b4u30eau304cu683cu7d0du3055u308cu3066u3044u308bu30abu30e9u30e0u540du307eu305fu306fu30a4u30f3u30c7u30c3u30afu30b9
-            has_header (bool): CSVu30d5u30a1u30a4u30ebu306bu30d8u30c3u30c0u30fcu884cu304cu3042u308bu304bu3069u3046u304b
+            file_path (str): CSVファイルのパス
+            keyword_column (str): キーワードが含まれる列名
+            category_column (str, optional): カテゴリが含まれる列名（任意）
+            has_header (bool): CSVファイルにヘッダー行があるかどうか
             
         Returns:
-            int: u8ffdu52a0u3055u308cu305fu30adu30fcu30efu30fcu30c9u306eu6570
+            int: インポートしたキーワードの数
         """
         file_path = Path(file_path)
         if not file_path.exists():
-            logger.error(f"u30d5u30a1u30a4u30ebu304cu898bu3064u304bu308au307eu305bu3093: {file_path}")
+            logger.error(f"ファイルが見つかりません: {file_path}")
             return 0
             
         try:
-            logger.info(f"CSVu30d5u30a1u30a4u30ebu304bu3089u30adu30fcu30efu30fcu30c9u3092u8aadu307fu8fcmu3093u3067u3044u307eu3059: {file_path}")
+            logger.info(f"CSVファイルをインポート: {file_path}")
             
-            # pandasu3092u4f7fu7528u3057u3066CSVu30d5u30a1u30a4u30ebu3092u8aadu307fu8fbcu3080
+            # pandasを用いてCSVファイルを読み込み
             df = pd.read_csv(file_path, header=0 if has_header else None)
             
-            # u5217u540du307eu305fu306fu30a4u30f3u30c7u30c3u30afu30b9u3067u30c7u30fcu30bfu3092u53d6u5f97
+            # カラム名を用いてキーワードを取得
             if has_header:
                 if keyword_column not in df.columns:
-                    logger.error(f"u6307u5b9au3055u308cu305fu5217u540du304cu898bu3064u304bu308au307eu305bu3093: {keyword_column}")
+                    logger.error(f"キーワード列名が見つかりません: {keyword_column}")
                     return 0
                 keywords = df[keyword_column].tolist()
                 categories = df[category_column].tolist() if category_column and category_column in df.columns else None
             else:
-                # headeru304cu306au3044u5834u5408u306fu30a4u30f3u30c7u30c3u30afu30b9u3067u5217u3092u6307u5b9a
+                # headerがない場合は列番号を用いてキーワードを取得
                 try:
                     keywords = df.iloc[:, int(keyword_column)].tolist()
                     categories = df.iloc[:, int(category_column)].tolist() if category_column is not None else None
                 except (IndexError, ValueError):
-                    logger.error(f"u7121u52b9u306au5217u30a4u30f3u30c7u30c3u30afu30b9: {keyword_column}")
+                    logger.error(f"キーワード列番号が不正です: {keyword_column}")
                     return 0
             
-            # u7a7au306eu30adu30fcu30efu30fcu30c9u3092u9664u5916
+            # 空またはNaNのキーワードを除外
             keywords = [k for k in keywords if k and not pd.isna(k)]
             
-            # u30c7u30fcu30bfu30d9u30fcu30b9u306bu4e00u62ecu8ffdu52a0
+            # カテゴリーを追加
             keyword_data = []
             if categories:
                 for i, keyword in enumerate(keywords):
@@ -83,48 +83,48 @@ class KeywordManager:
                 keyword_data = keywords
                 
             added_count = self.db.add_keywords_bulk(keyword_data)
-            logger.info(f"{added_count} u500bu306eu30adu30fcu30efu30fcu30c9u3092u8ffdu52a0u3057u307eu3057u305f")
+            logger.info(f"{added_count} キーワードを追加しました")
             return added_count
             
         except Exception as e:
-            logger.error(f"CSVu30d5u30a1u30a4u30ebu306eu8aadu307fu8fcbu307fu4e2du306bu30a8u30e9u30fcu304cu767au751fu3057u307eu3057u305f: {e}")
+            logger.error(f"CSVファイルのインポートに失敗しました: {e}")
             return 0
     
     def import_from_excel(self, file_path, sheet_name=0, keyword_column="keyword", category_column=None):
         """
-        Excelu30d5u30a1u30a4u30ebu304bu3089u30adu30fcu30efu30fcu30c9u3092u30a4u30f3u30ddu30fcu30c8u3059u308b
+        Excelファイルからキーワードをインポートします
         
         Args:
-            file_path (str): Excelu30d5u30a1u30a4u30ebu30d1u30b9
-            sheet_name (str or int): u30b7u30fcu30c8u540du307eu305fu306fu30a4u30f3u30c7u30c3u30afu30b9
-            keyword_column (str): u30adu30fcu30efu30fcu30c9u304cu683cu7d0du3055u308cu3066u3044u308bu30abu30e9u30e0u540d
-            category_column (str, optional): u30abu30c6u30b4u30eau304cu683cu7d0du3055u308cu3066u3044u308bu30abu30e9u30e0u540d
+            file_path (str): Excelファイルのパス
+            sheet_name (str or int): シート名またはシート番号
+            keyword_column (str): キーワード列名
+            category_column (str, optional): カテゴリー列名（任意）
             
         Returns:
-            int: u8ffdu52a0u3055u308cu305fu30adu30fcu30efu30fcu30c9u306eu6570
+            int: 追加されたキーワード数
         """
         file_path = Path(file_path)
         if not file_path.exists():
-            logger.error(f"u30d5u30a1u30a4u30ebu304cu898bu3064u304bu308au307eu305bu3093: {file_path}")
+            logger.error(f"ファイルが見つかりません: {file_path}")
             return 0
             
         try:
-            logger.info(f"Excelu30d5u30a1u30a4u30ebu304bu3089u30adu30fcu30efu30fcu30c9u3092u8aadu307fu8fcmu3093u3067u3044u307eu3059: {file_path}")
+            logger.info(f"Excelファイルをインポート: {file_path}")
             
-            # pandasu3092u4f7fu7528u3057u3066Excelu30d5u30a1u30a4u30ebu3092u8aadu307fu8fbcu3080
+            # pandasを用いてExcelファイルを読み込み
             df = pd.read_excel(file_path, sheet_name=sheet_name)
             
             if keyword_column not in df.columns:
-                logger.error(f"u6307u5b9au3055u308cu305fu5217u540du304cu898bu3064u304bu308au307eu305bu3093: {keyword_column}")
+                logger.error(f"キーワード列名が見つかりません: {keyword_column}")
                 return 0
                 
             keywords = df[keyword_column].tolist()
             categories = df[category_column].tolist() if category_column and category_column in df.columns else None
             
-            # u7a7au306eu30adu30fcu30efu30fcu30c9u3092u9664u5916
+            # 空またはNaNのキーワードを除外
             keywords = [k for k in keywords if k and not pd.isna(k)]
             
-            # u30c7u30fcu30bfu30d9u30fcu30b9u306bu4e00u62ecu8ffdu52a0
+            # カテゴリーを追加
             keyword_data = []
             if categories:
                 for i, keyword in enumerate(keywords):
@@ -134,36 +134,36 @@ class KeywordManager:
                 keyword_data = keywords
                 
             added_count = self.db.add_keywords_bulk(keyword_data)
-            logger.info(f"{added_count} u500bu306eu30adu30fcu30efu30fcu30c9u3092u8ffdu52a0u3057u307eu3057u305f")
+            logger.info(f"{added_count} キーワードを追加しました")
             return added_count
             
         except Exception as e:
-            logger.error(f"Excelu30d5u30a1u30a4u30ebu306eu8aadu307fu8fcbu307fu4e2du306bu30a8u30e9u30fcu304cu767au751fu3057u307eu3057u305f: {e}")
+            logger.error(f"Excelファイルのインポートに失敗しました: {e}")
             return 0
     
     def import_from_google_sheets(self, spreadsheet_id, range_name, keyword_column="keyword", category_column=None):
         """
-        Google Spreadsheetsu304bu3089u30adu30fcu30efu30fcu30c9u3092u30a4u30f3u30ddu30fcu30c8u3059u308b
+        Google Spreadsheetsからキーワードをインポートします
         
         Args:
             spreadsheet_id (str): Google Spreadsheets ID
-            range_name (str): u30c7u30fcu30bfu5bfeu8c61u7bc4u56f2uff08u4f8b: 'Sheet1!A1:B100'uff09
-            keyword_column (str): u30adu30fcu30efu30fcu30c9u304cu683cu7d0du3055u308cu3066u3044u308bu30abu30e9u30e0u540du307eu305fu306fu30a4u30f3u30c7u30c3u30afu30b9
-            category_column (str, optional): u30abu30c6u30b4u30eau304cu683cu7d0du3055u308cu3066u3044u308bu30abu30e9u30e0u540du307eu305fu306fu30a4u30f3u30c7u30c3u30afu30b9
+            range_name (str): シート範囲 (例: 'Sheet1!A1:B100')
+            keyword_column (str): キーワード列名
+            category_column (str, optional): カテゴリー列名（任意）
             
         Returns:
-            int: u8ffdu52a0u3055u308cu305fu30adu30fcu30efu30fcu30c9u306eu6500
+            int: 追加されたキーワード数
         """
         try:
-            logger.info(f"Google Spreadsheetsu304bu3089u30adu30fcu30efu30fcu30c9u3092u8aadu307fu8fcmu3093u3067u3044u307eu3059: {spreadsheet_id}")
+            logger.info(f"Google Spreadsheetsからキーワードをインポート: {spreadsheet_id}")
             
-            # Google Sheets APIu8a8du8a3cu3092u6e96u5099
+            # Google Sheets APIを用いて
             credentials_path = self.config.get_from_env(self.config.get('google_sheets', 'credentials_env'))
             if not credentials_path:
-                logger.error("Google Sheets APIu306eu8a8du8a3cu60c5u5831u304cu8a2du5b9au3055u308cu3066u3044u307eu305bu3093u3002")
+                logger.error("Google Sheets API認証情報が見つかりませんでした")
                 return 0
                 
-            # u30c8u30fcu30afu30f3u30c7u30a3u30ecu30afu30c8u30ea
+            # 認証トークンの保存先
             token_dir = self.config.get_path('google_sheets', 'token_dir')
             if token_dir is None:
                 token_dir = Path(__file__).parent.parent / 'data' / 'google_token'
@@ -171,60 +171,60 @@ class KeywordManager:
             token_dir.mkdir(parents=True, exist_ok=True)
             token_path = token_dir / 'token.json'
             
-            # APIu30b9u30b3u30fcu30d7
+            # Google Sheets APIのスコープ
             scopes = self.config.get('google_sheets', 'scopes', ['https://www.googleapis.com/auth/spreadsheets.readonly'])
             
-            # u8a8du8a3cu51e6u7406
+            # 認証トークンの取得
             creds = None
             if os.path.exists(token_path):
                 try:
                     creds = Credentials.from_authorized_user_info(
                         json.loads(token_path.read_text()), scopes)
                 except Exception as e:
-                    logger.warning(f"u30c8u30fcu30afu30f3u306eu8aadu307fu8fbcu307fu4e2du306bu30a8u30e9u30fcu304cu767au751fu3057u307eu3057u305f: {e}")
+                    logger.warning(f"Google Sheets API認証に失敗しました: {e}")
                     
-            # u671fu9650u5207u308cu307eu305fu306fu30c8u30fcu30afu30f3u304cu5b58u5728u3057u306au3044u5834u5408
+            # 認証トークンの更新
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                 else:
-                    # u65b0u305fu306bu8a8du8a3cu3092u5b9fu884c
+                    # 認証トークンの生成
                     flow = InstalledAppFlow.from_client_secrets_file(
                         credentials_path, scopes)
                     creds = flow.run_local_server(port=0)
                     
-                # u30c8u30fcu30afu30f3u3092u4fddu5b58
+                # 認証トークンの保存
                 token_path.write_text(creds.to_json())
                 
-            # Google Sheets APIu30b5u30fcu30d3u30b9u3092u6e96u5099
+            # Google Sheets APIのサービス
             service = build('sheets', 'v4', credentials=creds)
             sheet = service.spreadsheets()
             
-            # u30c7u30fcu30bfu306eu53d6u5f97
+            # キーワードを取得
             result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
             values = result.get('values', [])
             
             if not values:
-                logger.warning("u30c7u30fcu30bfu304cu898bu3064u304bu308au307eu305bu3093u3067u3057u305fu3002")
+                logger.warning("Google Spreadsheetsからキーワードを取得できませんでした")
                 return 0
                 
-            # u30c7u30fcu30bfu3092DataFrameu306bu5909u63db
+            # キーワードをDataFrameに変換
             header = values[0]
             data = values[1:] if len(values) > 1 else []
             
-            # u7a7au306eu5217u3092u8ffdu52a0u3057u3066u3059u3079u3066u306eu884cu304cu540cu3058u9577u3055u306bu306au308bu3088u3046u306bu3059u308b
+            # カンマ区切りのキーワードを展開
             max_cols = max(len(row) for row in values)
             data = [row + [''] * (max_cols - len(row)) for row in data]
             
             df = pd.DataFrame(data, columns=header)
             
-            # u5217u540du307eu305fu306fu30a4u30f3u30c7u30c3u30afu30b9u3067u30c7u30fcu30bfu3092u53d6u5f97
+            # キーワードを取得
             try:
                 if isinstance(keyword_column, int):
                     keywords = df.iloc[:, keyword_column].tolist()
                 else:
                     if keyword_column not in df.columns:
-                        logger.error(f"u6307u5b9au3055u308cu305fu5217u540du304cu898bu3064u304bu308au307eu305bu3093: {keyword_column}")
+                        logger.error(f"キーワード列名が見つかりません: {keyword_column}")
                         return 0
                     keywords = df[keyword_column].tolist()
                     
@@ -236,13 +236,13 @@ class KeywordManager:
                 else:
                     categories = None
             except Exception as e:
-                logger.error(f"u5217u30c7u30fcu30bfu306eu53d6u5f97u4e2du306bu30a8u30e9u30fcu304cu767au751fu3057u307eu3057u305f: {e}")
+                logger.error(f"キーワードとカテゴリを取得する際にエラーが発生しました: {e}")
                 return 0
                 
-            # u7a7au306eu30adu30fcu30efu30fcu30c9u3092u9664u5916
+            # キーワードを重複していませんか
             keywords = [k for k in keywords if k and not pd.isna(k)]
             
-            # u30c7u30fcu30bfu30d9u30fcu30b9u306bu4e00u62ecu8ffdu52a0
+            # キーワードとカテゴリを組み立てる
             keyword_data = []
             if categories:
                 for i, keyword in enumerate(keywords):
@@ -252,32 +252,32 @@ class KeywordManager:
                 keyword_data = keywords
                 
             added_count = self.db.add_keywords_bulk(keyword_data)
-            logger.info(f"{added_count} u500bu306eu30adu30fcu30efu30fcu30c9u3092u8ffdu52a0u3057u307eu3057u305f")
+            logger.info(f"{added_count} キーワードを追加しました")
             return added_count
             
         except Exception as e:
-            logger.error(f"Google Sheetsu304bu3089u306eu30c7u30fcu30bfu53d6u5f97u4e2du306bu30a8u30e9u30fcu304cu767au751fu3057u307eu3057u305f: {e}")
+            logger.error(f"Google Sheetsからキーワードを取得する際にエラーが発生しました: {e}")
             return 0
             
     def get_active_keywords(self, limit=None):
         """
-        u30a2u30afu30c6u30a3u30d6u306au30adu30fcu30efu30fcu30c9u3092u53d6u5f97u3059u308b
+        キーワードを取得します
         
         Args:
-            limit (int, optional): u53d6u5f97u3059u308bu30adu30fcu30efu30fcu30c9u306eu6700u5927u6570
+            limit (int, optional): 取得するキーワードの最大数
             
         Returns:
-            list: u30adu30fcu30efu30fcu30c9u30aau30d6u30b8u30a7u30afu30c8u306eu30eau30b9u30c8
+            list: 取得したキーワードのリスト
         """
         return self.db.get_keywords(status='active', limit=limit)
     
     def mark_keyword_as_processed(self, keyword_id, status='completed'):
         """
-        u30adu30fcu30efu30fcu30c9u306eu30b9u30c6u30fcu30bfu30b9u3092u66f4u65b0u3059u308b
+        キーワードの状態を更新します
         
         Args:
-            keyword_id (int): u30adu30fcu30efu30fcu30c9ID
-            status (str): u65b0u3057u3044u30b9u30c6u30fcu30bfu30b9 ('completed', 'failed', 'active')
+            keyword_id (int): キーワードID
+            status (str): 更新する状態 ('completed', 'failed', 'active')
         """
         with self.db.session_scope() as session:
             keyword = session.query(self.db.models.Keyword).filter(
