@@ -1,5 +1,6 @@
 # データベースマネージャークラス
 
+import copy
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker, scoped_session
 from models.data_models import Base, Keyword, EbaySearchResult, SearchHistory, ExportHistory
@@ -121,7 +122,8 @@ class DatabaseManager:
             query = session.query(Keyword).filter(Keyword.status == status)
             if limit:
                 query = query.limit(limit)
-            return query.all()
+            result = copy.deepcopy(query.all())
+            return result
     
     # 検索結果の保存
     def save_search_results(self, keyword_id, results):
