@@ -70,6 +70,7 @@ class KeywordManager:
                     logger.error(f"キーワード列番号が不正です: {keyword_column}")
                     return 0
             
+            # TODO: 除外されるとキーワードとカテゴリーの関係性が崩れる可能性がある
             # 空またはNaNのキーワードを除外
             keywords = [k for k in keywords if k and not pd.isna(k)]
             

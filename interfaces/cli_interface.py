@@ -107,7 +107,7 @@ def search_keywords(
         total_results = 0
         with Progress(
             TextColumn("[bold blue]{task.description}"),
-            BarColumn(bar_width=None),
+            BarColumn(bar_width=50),
             "[progress.percentage]{task.percentage:>3.0f}%",
             "•",
             TaskProgressColumn(),

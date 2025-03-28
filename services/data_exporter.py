@@ -11,6 +11,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 import os.path
 import json
+from models.data_models import EbaySearchResult, ExportHistory
 
 logger = logging.getLogger(__name__)
 
@@ -332,10 +333,10 @@ class DataExporter:
         
         try:
             with self.db.session_scope() as session:
-                query = session.query(self.db.models.EbaySearchResult)
+                query = session.query(EbaySearchResult)
                 
                 if keyword_id:
-                    query = query.filter(self.db.models.EbaySearchResult.keyword_id == keyword_id)
+                    query = query.filter(EbaySearchResult.keyword_id == keyword_id)
                     
                 # ジョブIDの場合は、そのジョブで処理されたキーワードIDを特定する必要がある
                 # 実装例：この部分は実際のデータベーススキーマに応じて調整が必要
@@ -407,7 +408,7 @@ class DataExporter:
         """
         try:
             with self.db.session_scope() as session:
-                history = self.db.models.ExportHistory(
+                history = ExportHistory(
                     export_type=export_type,
                     file_path=file_path,
                     record_count=record_count,

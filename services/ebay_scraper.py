@@ -1,6 +1,7 @@
 # eBayスクレイピングを行うクラス
 
 import logging
+from pathlib import Path
 import time
 import re
 from datetime import datetime, timedelta
@@ -253,7 +254,7 @@ class EbayScraper:
             page.goto(search_url)
             
             # ページが完全に読み込まれるまで待機
-            page.wait_for_load_state('networkidle')
+            page.wait_for_load_state('domcontentloaded')
             
             all_results = []
             current_page = 1
@@ -291,7 +292,7 @@ class EbayScraper:
             return all_results
             
         except Exception as e:
-            logger.error(f"検索中にエラーが発生しました: {e}")
+            logger.error(f"検索中にエラーが発生しました<{search_url}>: {e}")
             # エラー発生時にスクリーンショットを保存（デバッグ用）
             self._save_debug_screenshot(page, keyword)
             page.close()
