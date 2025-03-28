@@ -17,6 +17,7 @@ import sys
 import os
 import logging
 from pathlib import Path
+import traceback
 
 # アプリケーションのルートディレクトリをシステムパスに追加
 app_root = Path(__file__).parent
@@ -63,6 +64,7 @@ def main():
         app()
     except Exception as e:
         logger.exception(f"予期せぬエラーが発生しました: {e}")
+        logger.error(traceback.format_exc())
         print(f"エラー: {str(e)}")
         sys.exit(1)
 
