@@ -24,20 +24,20 @@ class EbayScraper:
             config_manager: 設定マネージャーのインスタンス
         """
         self.config = config_manager
-        self.base_url = self.config.get('ebay', 'base_url', 'https://www.ebay.com')
-        self.country = self.config.get('ebay', 'country', 'US')
-        self.headless = self.config.get('scraping', 'headless', True)
-        self.user_agent = self.config.get('scraping', 'user_agent')
-        self.timeout = self.config.get('ebay', 'search', 'timeout', 30) * 1000  # ミリ秒単位
-        self.request_delay = self.config.get('ebay', 'search', 'request_delay', 2)
-        self.max_pages = self.config.get('ebay', 'search', 'max_pages', 2)
-        self.items_per_page = self.config.get('ebay', 'search', 'items_per_page', 50)
-        self.proxy_enabled = self.config.get('scraping', 'proxy', 'enabled', False)
-        self.proxy_url = self.config.get('scraping', 'proxy', 'url', '')
+        self.base_url = self.config.get(['ebay', 'base_url'], 'https://www.ebay.com')
+        self.country = self.config.get(['ebay', 'country'], 'US')
+        self.headless = self.config.get(['scraping', 'headless'], True)
+        self.user_agent = self.config.get(['scraping', 'user_agent'])
+        self.timeout = self.config.get(['ebay', 'search', 'timeout'], 30) * 1000  # ミリ秒単位
+        self.request_delay = self.config.get(['ebay', 'search', 'request_delay'], 2)
+        self.max_pages = self.config.get(['ebay', 'search', 'max_pages'], 2)
+        self.items_per_page = self.config.get(['ebay', 'search', 'items_per_page'], 50)
+        self.proxy_enabled = self.config.get(['scraping', 'proxy', 'enabled'], False)
+        self.proxy_url = self.config.get(['scraping', 'proxy', 'url'], '')
         
         # ログイン情報
-        self.username = self.config.get_from_env(self.config.get('ebay', 'login', 'username_env'))
-        self.password = self.config.get_from_env(self.config.get('ebay', 'login', 'password_env'))
+        self.username = self.config.get_from_env(self.config.get(['ebay', 'login', 'username_env']))
+        self.password = self.config.get_from_env(self.config.get(['ebay', 'login', 'password_env']))
         
         # ログイン状態を管理
         self.is_logged_in = False

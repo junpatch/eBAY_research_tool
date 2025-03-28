@@ -31,7 +31,7 @@ class DataExporter:
         self.db = database_manager
         
         # 出力ディレクトリの設定
-        self.output_dir = self.config.get_path('export', 'output_dir')
+        self.output_dir = self.config.get_path(['export', 'output_dir'])
         if self.output_dir is None:
             self.output_dir = Path(__file__).parent.parent / 'data' / 'exports'
             
@@ -39,10 +39,10 @@ class DataExporter:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # デフォルトの出力形式
-        self.default_format = self.config.get('export', 'default_format', 'csv')
+        self.default_format = self.config.get(['export', 'default_format'], 'csv')
         
         # Google Spreadsheetの設定
-        self.spreadsheet_id = self.config.get('export', 'google_spreadsheet_id', '')
+        self.spreadsheet_id = self.config.get(['export', 'google_spreadsheet_id'], '')
         
     def export_results(self, results=None, keyword_id=None, job_id=None, format=None, file_path=None):
         """
@@ -202,13 +202,13 @@ class DataExporter:
                 data = pd.DataFrame(data)
                 
             # Google Sheets API認証を準備
-            credentials_path = self.config.get_from_env(self.config.get('google_sheets', 'credentials_env'))
+            credentials_path = self.config.get_from_env(self.config.get(['google_sheets', 'credentials_env']))
             if not credentials_path:
                 logger.error("Google Sheets APIの認証情報が設定されていません。")
                 return None
                 
             # トークンディレクトリ
-            token_dir = self.config.get_path('google_sheets', 'token_dir')
+            token_dir = self.config.get_path(['google_sheets', 'token_dir'])
             if token_dir is None:
                 token_dir = Path(__file__).parent.parent / 'data' / 'google_token'
                 
@@ -216,7 +216,7 @@ class DataExporter:
             token_path = token_dir / 'token.json'
             
             # APIスコープ
-            scopes = self.config.get('google_sheets', 'scopes', ['https://www.googleapis.com/auth/spreadsheets'])
+            scopes = self.config.get(['google_sheets', 'scopes'], ['https://www.googleapis.com/auth/spreadsheets'])
             
             # 認証処理
             creds = None
