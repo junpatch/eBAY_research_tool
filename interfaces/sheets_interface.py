@@ -25,8 +25,8 @@ class GoogleSheetsInterface:
             config_manager: 設定管理サービスのインスタンス
         """
         self.config = config_manager
-        self.credentials_path = self.config.get_from_env(self.config.get('google_sheets', 'credentials_env'))
-        self.token_dir = self.config.get_path('google_sheets', 'token_dir')
+        self.credentials_path = self.config.get_from_env(self.config.get(['google_sheets', 'credentials_env']))
+        self.token_dir = self.config.get_path(['google_sheets', 'token_dir'])
         
         if self.token_dir is None:
             self.token_dir = Path(__file__).parent.parent / 'data' / 'google_token'
@@ -35,7 +35,7 @@ class GoogleSheetsInterface:
         self.token_path = self.token_dir / 'token.json'
         
         # APIスコープ
-        self.scopes = self.config.get('google_sheets', 'scopes', ['https://www.googleapis.com/auth/spreadsheets'])
+        self.scopes = self.config.get(['google_sheets', 'scopes'], ['https://www.googleapis.com/auth/spreadsheets'])
         
         # APIサービス
         self.service = None

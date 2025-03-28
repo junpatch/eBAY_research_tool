@@ -49,15 +49,15 @@ def test_config_get(temp_config_file):
     config = ConfigManager(config_path=temp_config_file)
     
     # トップレベルの設定値を取得
-    assert config.get('app', 'name') == 'eBay Research Tool'
-    assert config.get('app', 'version') == '1.0.0'
+    assert config.get(['app', 'name']) == 'eBay Research Tool'
+    assert config.get(['app', 'version']) == '1.0.0'
     
     # 階層化された設定値を取得
-    assert config.get('database', 'url') == 'sqlite:///data/ebay_research.db'
-    assert config.get('database', 'echo') is False
+    assert config.get(['database', 'url']) == 'sqlite:///data/ebay_research.db'
+    assert config.get(['database', 'echo']) is False
     
     # デフォルト値をテスト
-    assert config.get('nonexistent', 'key', 'default') == 'default'
+    assert config.get(['nonexistent', 'key'], 'default') == 'default'
 
 def test_get_from_env(monkeypatch, temp_config_file):
     """環境変数からの設定値取得をテスト"""
@@ -79,12 +79,12 @@ def test_get_path(temp_config_file):
     config = ConfigManager(config_path=temp_config_file)
     
     # 相対パスの解決
-    data_path = config.get_path('paths', 'data_dir')
+    data_path = config.get_path(['paths', 'data_dir'])
     assert isinstance(data_path, Path)
     assert data_path.name == 'data'
     
     # 存在しないパス設定
-    assert config.get_path('nonexistent', 'path') is None
+    assert config.get_path(['nonexistent', 'path']) is None
 
 def test_get_db_url(temp_config_file):
     """データベースURLの取得をテスト"""

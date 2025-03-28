@@ -4,6 +4,7 @@ import os
 import yaml
 from pathlib import Path
 from dotenv import load_dotenv
+from functools import reduce
 
 class ConfigManager:
     """アプリケーション設定を管理するクラス"""
@@ -35,38 +36,30 @@ class ConfigManager:
             
         self.base_dir = base_dir
     
-    def get(self, section, key=None, default=None):
+    def get(self, keys, default=None):
         """
         設定値を取得する
         
         Args:
-            section (str): 設定セクション
-            key (str, optional): 設定キー。None の場合はセクション全体を返す
+            keys (list): 設定セクションとキーのリスト
             default: キーが存在しない場合のデフォルト値
             
         Returns:
             設定値、またはデフォルト値
         """
-        if section not in self.config:
-            return default
-            
-        if key is None:
-            return self.config[section]
-            
-        return self.config[section].get(key, default)
+        return reduce(lambda dict, key: dict.get(key, default), keys, self.config)
     
-    def get_path(self, section, key):
+    def get_path(self, keys):
         """
         パス設定を絶対パスとして取得する
         
         Args:
-            section (str): 設定セクション
-            key (str): 設定キー
+            keys (list): 設定セクションとキーのリスト
             
         Returns:
             Path: 絶対パスオブジェクト
         """
-        path_str = self.get(section, key)
+        path_str = self.get(keys)
         if not path_str:
             return None
             
@@ -97,10 +90,10 @@ class ConfigManager:
         Returns:
             str: SQLAlchemy接続URL
         """
-        db_type = self.get('database', 'type', 'sqlite')
+        db_type = self.get(['database', 'type'], 'sqlite')
         
         if db_type == 'sqlite':
-            db_path = self.get_path('database', 'path')
+            db_path = self.get_path(['database', 'path'])
             if db_path is None:
                 db_path = self.base_dir / 'data' / 'ebay_research.db'
                 
