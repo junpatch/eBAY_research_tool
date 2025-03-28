@@ -158,13 +158,13 @@ class KeywordManager:
             logger.info(f"Google Spreadsheetsからキーワードをインポート: {spreadsheet_id}")
             
             # Google Sheets APIを用いて
-            credentials_path = self.config.get_from_env(self.config.get('google_sheets', 'credentials_env'))
+            credentials_path = self.config.get_from_env(self.config.get(['google_sheets', 'credentials_env']))
             if not credentials_path:
                 logger.error("Google Sheets API認証情報が見つかりませんでした")
                 return 0
                 
             # 認証トークンの保存先
-            token_dir = self.config.get_path('google_sheets', 'token_dir')
+            token_dir = self.config.get_path(['google_sheets', 'token_dir'])
             if token_dir is None:
                 token_dir = Path(__file__).parent.parent / 'data' / 'google_token'
                 
@@ -172,7 +172,7 @@ class KeywordManager:
             token_path = token_dir / 'token.json'
             
             # Google Sheets APIのスコープ
-            scopes = self.config.get('google_sheets', 'scopes', ['https://www.googleapis.com/auth/spreadsheets.readonly'])
+            scopes = self.config.get(['google_sheets', 'scopes'], ['https://www.googleapis.com/auth/spreadsheets.readonly'])
             
             # 認証トークンの取得
             creds = None
