@@ -1,6 +1,7 @@
 # eBayスクレイピングを行うクラス
 
 import logging
+from pathlib import Path
 import time
 import re
 from datetime import datetime, timedelta
@@ -253,7 +254,7 @@ class EbayScraper:
             page.goto(search_url)
             
             # ページが完全に読み込まれるまで待機
-            page.wait_for_load_state('networkidle')
+            page.wait_for_load_state('domcontentloaded')
             
             all_results = []
             current_page = 1
