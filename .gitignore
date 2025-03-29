@@ -54,3 +54,6 @@ secrets.json
 input.csv
 windsurf.json
 data/
+
+# windsurf rules
+.windsurfrules

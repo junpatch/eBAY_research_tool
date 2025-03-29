@@ -254,7 +254,7 @@ class EbayScraper:
             page.goto(search_url)
             
             # ページが完全に読み込まれるまで待機
-            page.wait_for_load_state('domcontentloaded')
+            page.wait_for_load_state('load')
             
             all_results = []
             current_page = 1
@@ -279,7 +279,7 @@ class EbayScraper:
                     next_button.click()
                     
                     # ページ遷移の待機
-                    page.wait_for_load_state('networkidle')
+                    page.wait_for_load_state('load')
                     
                     # リクエスト間の遅延（ブロックを避けるため）
                     delay = self.request_delay + random.uniform(0, 1)
@@ -341,11 +341,19 @@ class EbayScraper:
                 price_elem = item.query_selector('.s-item__price')
                 if price_elem:
                     price_text = price_elem.inner_text().strip()
-                    # 価格から数値を抽出
-                    price_match = re.search(r'\$(\d+\.?\d*)', price_text)
-                    if price_match:
-                        item_data['price'] = float(price_match.group(1))
-                        item_data['currency'] = 'USD'  # デフォルトはUSD
+                    
+                    if '$' in price_text: #ドルの場合
+                        # 価格から数値を抽出
+                        price_match = re.search(r'\$(\d{1,3}(?:,\d{3})*\.\d{2})', price_text)
+                        if price_match:
+                            item_data['price'] = float(price_match.group(1).replace(',', ''))
+                            item_data['currency'] = 'USD'  # デフォルトはUSD
+                    else: # 円の場合
+                        # 価格から数値を抽出
+                        price_match = re.search(r'(\d{1,3}(?:,\d{3})*|\d+)\s*(?:円|JPY)', price_text)
+                        if price_match:
+                            item_data['price'] = float(price_match.group(1).replace(',', ''))
+                            item_data['currency'] = 'JPY'  # デフォルトはJPY
                         
                 # 送料
                 shipping_elem = item.query_selector('.s-item__shipping')
@@ -355,32 +363,26 @@ class EbayScraper:
                         item_data['shipping_price'] = 0.0
                     else:
                         # 送料から数値を抽出
-                        shipping_match = re.search(r'\$(\d+\.?\d*)', shipping_text)
+                        shipping_match = re.search(r"(\d{1,3}(?:,\d{3})*)\s*(?:円|JPY)", shipping_text)
                         if shipping_match:
-                            item_data['shipping_price'] = float(shipping_match.group(1))
+                            item_data['shipping_price'] = float(shipping_match.group(1).replace(',', ''))
                         
+                # TODO: 出品者情報を抽出できない場合がある（例：Discount Computer Depot（128967）98.7%）
                 # 出品者情報
-                seller_elem = item.query_selector('.s-item__seller-info')
+                seller_elem = item.query_selector('.s-item__seller-info-text')
                 if seller_elem:
                     seller_text = seller_elem.inner_text().strip()
-                    # 出品者名を抽出
-                    seller_name_match = re.search(r'Seller: ([^\(]+)', seller_text)
+                    seller_name_match = re.search(r"([a-zA-Z0-9_ -]+)\s\((\d{1,3}(?:,\d{3})*)\)\s(\d+(?:\.\d+)?%)", seller_text)
                     if seller_name_match:
+                        # 出品者名を抽出
                         item_data['seller_name'] = seller_name_match.group(1).strip()
-                    
-                    # 評価数を抽出
-                    feedback_match = re.search(r'\((\d+)\)', seller_text)
-                    if feedback_match:
-                        item_data['seller_feedback_count'] = int(feedback_match.group(1))
-                        
-                # 出品者の評価
-                rating_elem = item.query_selector('.x-seller-rating')
-                if rating_elem:
-                    rating_text = rating_elem.inner_text().strip()
-                    rating_match = re.search(r'(\d+\.?\d*)%', rating_text)
-                    if rating_match:
-                        item_data['seller_rating'] = float(rating_match.group(1)) / 100.0  # パーセントから小数に変換
-                        
+                        # 評価数を抽出
+                        item_data['seller_feedback_count'] = int(seller_name_match.group(2).replace(",","").strip())
+                        # 評価を抽出
+                        item_data['seller_rating'] = float(seller_name_match.group(3).replace("%","")) / 100.0
+                    else:
+                        print(f"出品者情報の抽出に失敗: {seller_text}")
+                                            
                 # 入札数
                 bids_elem = item.query_selector('.s-item__bids')
                 if bids_elem:
@@ -430,7 +432,7 @@ class EbayScraper:
                     item_data['auction_end_time'] = end_time
                 
                 # 画像URL
-                img_elem = item.query_selector('.s-item__image-img')
+                img_elem = item.query_selector('.s-item__image-wrapper >img')
                 if img_elem:
                     item_data['image_url'] = img_elem.get_attribute('src')
                     
