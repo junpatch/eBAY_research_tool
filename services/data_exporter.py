@@ -12,6 +12,7 @@ from google.oauth2.credentials import Credentials
 import os.path
 import json
 from models.data_models import EbaySearchResult, ExportHistory
+from interfaces.sheets_interface import GoogleSheetsInterface
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +42,6 @@ class DataExporter:
         
         # デフォルトの出力形式
         self.default_format = self.config.get(['export', 'default_format'], 'csv')
-        
-        # Google Spreadsheetの設定
-        self.spreadsheet_id = self.config.get(['export', 'google_spreadsheet_id'], '')
         
     def export_results(self, results=None, keyword_id=None, job_id=None, format=None, file_path=None):
         """
@@ -92,6 +90,8 @@ class DataExporter:
                 file_path = self.output_dir / f"{filename}.csv"
             elif format.lower() == 'excel':
                 file_path = self.output_dir / f"{filename}.xlsx"
+            elif format.lower() == 'google_sheets':
+                file_path = filename
                 
         # 形式に応じてエクスポート
         if format.lower() == 'csv':
@@ -99,7 +99,7 @@ class DataExporter:
         elif format.lower() == 'excel':
             return self.export_to_excel(df, file_path)
         elif format.lower() == 'google_sheets':
-            return self.export_to_google_sheets(df, self.spreadsheet_id)
+            return self.export_to_google_sheets(df, file_path)
         else:
             logger.error(f"サポートされていない形式です: {format}")
             return None
@@ -185,128 +185,42 @@ class DataExporter:
             logger.error(f"Excelエクスポート中にエラーが発生しました: {e}")
             return None
     
-    def export_to_google_sheets(self, data, spreadsheet_id=None, sheet_name=None):
+    def export_to_google_sheets(self, data, title=None, sheet_name=None):
         """
         データをGoogle Sheetsにエクスポートする
         
         Args:
             data: DataFrameまたはリスト
-            spreadsheet_id (str, optional): Google SpreadsheetのID
+            title (str, optional): Google Sheets出力ファイル名
             sheet_name (str, optional): シート名
             
         Returns:
             str: スプレッドシートのURL
         """
+        google_sheets = GoogleSheetsInterface(self.config)
+
         try:
             # DataFrameでない場合はDataFrameに変換
             if not isinstance(data, pd.DataFrame):
                 data = pd.DataFrame(data)
-                
-            # Google Sheets API認証を準備
-            credentials_path = self.config.get_from_env(self.config.get(['google_sheets', 'credentials_env']))
-            if not credentials_path:
-                logger.error("Google Sheets APIの認証情報が設定されていません。")
-                return None
-                
-            # トークンディレクトリ
-            token_dir = self.config.get_path(['google_sheets', 'token_dir'])
-            if token_dir is None:
-                token_dir = Path(__file__).parent.parent / 'data' / 'google_token'
-                
-            token_dir.mkdir(parents=True, exist_ok=True)
-            token_path = token_dir / 'token.json'
-            
-            # APIスコープ
-            scopes = self.config.get(['google_sheets', 'scopes'], ['https://www.googleapis.com/auth/spreadsheets'])
-            
-            # 認証処理
-            creds = None
-            if os.path.exists(token_path):
-                try:
-                    creds = Credentials.from_authorized_user_info(
-                        json.loads(token_path.read_text()), scopes)
-                except Exception as e:
-                    logger.warning(f"トークンの読み込み中にエラーが発生しました: {e}")
-                    
-            # 期限切れまたはトークンが存在しない場合
-            if not creds or not creds.valid:
-                if creds and creds.expired and creds.refresh_token:
-                    creds.refresh(Request())
-                else:
-                    # 新たに認証を実行
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        credentials_path, scopes)
-                    creds = flow.run_local_server(port=0)
-                    
-                # トークンを保存
-                token_path.write_text(creds.to_json())
-                
-            # Google Sheets APIサービスを準備
-            service = build('sheets', 'v4', credentials=creds)
-            
-            # スプレッドシートIDが指定されていない場合は新規作成
-            if not spreadsheet_id:
-                if not self.spreadsheet_id:
-                    # 新規スプレッドシート作成
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    spreadsheet = service.spreadsheets().create(
-                        body={
-                            'properties': {'title': f'eBay Research Results - {timestamp}'},
-                            'sheets': [{'properties': {'title': sheet_name or 'eBay検索結果'}}]
-                        }
-                    ).execute()
-                    spreadsheet_id = spreadsheet['spreadsheetId']
-                    logger.info(f"新しいスプレッドシートを作成しました: {spreadsheet_id}")
-                else:
-                    spreadsheet_id = self.spreadsheet_id
             
             # シート名が指定されていない場合はデフォルト名
-            if not sheet_name:
-                sheet_name = 'eBay検索結果'
-                
-            # シートが存在するか確認し、なければ作成
-            spreadsheet = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-            sheets = spreadsheet.get('sheets', [])
-            sheet_exists = False
+            sheet_name = sheet_name or 'eBay検索結果'
             
-            for sheet in sheets:
-                if sheet['properties']['title'] == sheet_name:
-                    sheet_exists = True
-                    break
-                    
-            if not sheet_exists:
-                # 新しいシートを追加
-                request = service.spreadsheets().batchUpdate(
-                    spreadsheetId=spreadsheet_id,
-                    body={
-                        'requests': [{
-                            'addSheet': {
-                                'properties': {'title': sheet_name}
-                            }
-                        }]
-                    }
-                ).execute()
+            # TODO: 任意のフォルダ配下に作成する（Drive APIとの連携が必要）
+            # スプレッドシートを新規作成
+            spreadsheet_id = google_sheets.create_spreadsheet(title, [sheet_name])
             
             # データの整形（日付型やNoneの処理）
             data_values = data.fillna('').astype(str).values.tolist()
             header_values = data.columns.tolist()
             
             # まずシートをクリア
-            service.spreadsheets().values().clear(
-                spreadsheetId=spreadsheet_id,
-                range=f"{sheet_name}!A1:Z50000"
-            ).execute()
+            google_sheets.clear_range(spreadsheet_id, f"{sheet_name}!A1:Z50000")
             
             # ヘッダーとデータを書き込み
             values = [header_values] + data_values
-            body = {'values': values}
-            
-            result = service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range=f"{sheet_name}!A1",
-                valueInputOption='RAW',
-                body=body
-            ).execute()
+            result = google_sheets.write_to_spreadsheet(spreadsheet_id, f"{sheet_name}!A1", values)
             
             # エクスポート履歴を記録
             self._record_export_history('google_sheets', f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}", len(data))

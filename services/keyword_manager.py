@@ -10,6 +10,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 import os.path
 import json
+from interfaces.sheets_interface import GoogleSheetsInterface
 
 logger = logging.getLogger(__name__)
 
@@ -155,56 +156,14 @@ class KeywordManager:
         Returns:
             int: 追加されたキーワード数
         """
+        google_sheets = GoogleSheetsInterface(self.config)
+
         try:
             logger.info(f"Google Spreadsheetsからキーワードをインポート: {spreadsheet_id}")
             
-            # Google Sheets APIを用いて
-            credentials_path = self.config.get_from_env(self.config.get(['google_sheets', 'credentials_env']))
-            if not credentials_path:
-                logger.error("Google Sheets API認証情報が見つかりませんでした")
-                return 0
-                
-            # 認証トークンの保存先
-            token_dir = self.config.get_path(['google_sheets', 'token_dir'])
-            if token_dir is None:
-                token_dir = Path(__file__).parent.parent / 'data' / 'google_token'
-                
-            token_dir.mkdir(parents=True, exist_ok=True)
-            token_path = token_dir / 'token.json'
-            
-            # Google Sheets APIのスコープ
-            scopes = self.config.get(['google_sheets', 'scopes'], ['https://www.googleapis.com/auth/spreadsheets.readonly'])
-            
-            # 認証トークンの取得
-            creds = None
-            if os.path.exists(token_path):
-                try:
-                    creds = Credentials.from_authorized_user_info(
-                        json.loads(token_path.read_text()), scopes)
-                except Exception as e:
-                    logger.warning(f"Google Sheets API認証に失敗しました: {e}")
-                    
-            # 認証トークンの更新
-            if not creds or not creds.valid:
-                if creds and creds.expired and creds.refresh_token:
-                    creds.refresh(Request())
-                else:
-                    # 認証トークンの生成
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        credentials_path, scopes)
-                    creds = flow.run_local_server(port=0)
-                    
-                # 認証トークンの保存
-                token_path.write_text(creds.to_json())
-                
-            # Google Sheets APIのサービス
-            service = build('sheets', 'v4', credentials=creds)
-            sheet = service.spreadsheets()
-            
-            # キーワードを取得
-            result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
-            values = result.get('values', [])
-            
+            # Google Sheets APIを用いてキーワードを取得
+            values = google_sheets.read_spreadsheet(spreadsheet_id, range_name)
+
             if not values:
                 logger.warning("Google Spreadsheetsからキーワードを取得できませんでした")
                 return 0
