@@ -16,8 +16,9 @@ console = Console()
 
 @app.command("import")
 def import_keywords(
-    file: Path = typer.Option(..., "--file", "-f", help="インポートするCSV/Excelファイルパス"),
-    format: str = typer.Option("csv", "--format", "-t", help="ファイル形式（csv または excel）"),
+    # TODO: Google SheetsからのインポートをIDではなくファイル名で実装したい
+    format: str = typer.Option("csv", "--format", "-t", help="ファイル形式（csv, excel, google_sheets）"),
+    file: Optional[Path] = typer.Option(None, "--file", "-f", help="インポートするCSV/Excelファイルパス（--formatがcsvまたはexcelの場合は必須）"),
     keyword_column: str = typer.Option("keyword", "--keyword-column", "-k", help="キーワードが含まれる列名"),
     category_column: Optional[str] = typer.Option(None, "--category-column", "-c", help="カテゴリが含まれる列名（任意）"),
     has_header: bool = typer.Option(True, "--header/--no-header", help="ヘッダー行の有無")
@@ -35,10 +36,13 @@ def import_keywords(
     db.create_tables()
     keyword_manager = KeywordManager(db, config)
     
-    # ファイル形式のチェック
-    if not file.exists():
-        console.print(f"[bold red]エラー:[/] ファイル '{file}' が見つかりません。", style="red")
-        raise typer.Exit(1)
+    if format in {"csv", "excel"}:
+        if file is None:
+            console.print("[bold red]エラー:[/] CSV または Excel の場合、--file オプションは必須です。", style="red")
+            raise typer.Exit(1)
+        if not file.exists():
+            console.print(f"[bold red]エラー:[/] ファイル '{file}' が見つかりません。", style="red")
+            raise typer.Exit(1)
         
     # インポート処理
     with console.status(f"[bold green]キーワードをインポート中...[/]") as status:
@@ -49,6 +53,14 @@ def import_keywords(
             elif format.lower() == "excel":
                 added_count = keyword_manager.import_from_excel(
                     file, 0, keyword_column, category_column)
+            elif format.lower() == "google_sheets":
+                spreadsheet_id = config.get_from_env(config.get(['google_sheets', 'spreadsheet_id']))
+                range_name = config.get(['google_sheets', 'range_name'])
+                if not spreadsheet_id or not range_name:
+                    console.print("[bold red]エラー:[/] Google Spreadsheets IDまたは範囲が設定されていません。", style="red")
+                    raise typer.Exit(1)
+                added_count = keyword_manager.import_from_google_sheets(
+                    spreadsheet_id, range_name, keyword_column, category_column)
             else:
                 console.print(f"[bold red]エラー:[/] サポートされていない形式です: {format}", style="red")
                 raise typer.Exit(1)

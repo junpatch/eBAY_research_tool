@@ -49,6 +49,8 @@ Thumbs.db
 # Secrets
 config.yaml
 secrets.json
+credentials.json
+.env
 
 
 input.csv
