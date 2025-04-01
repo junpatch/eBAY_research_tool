@@ -36,3 +36,6 @@ pytest==7.4.3
 # Utilities
 tenacity==8.2.3  # Retrying library
 tqdm==4.66.1  # Progress bars
+
+pytest-asyncio==0.21.1
+pytest-cov

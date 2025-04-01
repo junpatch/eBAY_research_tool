@@ -10,7 +10,7 @@ from core.config_manager import ConfigManager
 @pytest.fixture
 def temp_config_file():
     """一時的な設定ファイルを作成するフィクスチャ"""
-    with tempfile.NamedTemporaryFile(suffix='.yaml', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(suffix='.yaml', delete=False,mode='w',encoding='utf-8') as tmp:
         config_data = {
             'app': {
                 'name': 'eBay Research Tool',
@@ -22,8 +22,10 @@ def temp_config_file():
             },
             'ebay': {
                 'base_url': 'https://www.ebay.com',
-                'username_env': 'EBAY_USERNAME',
-                'password_env': 'EBAY_PASSWORD'
+                'login': {
+                    'username_env': 'EBAY_USERNAME',
+                    'password_env': 'EBAY_PASSWORD'
+                }
             },
             'paths': {
                 'data_dir': 'data',
@@ -55,8 +57,10 @@ def test_config_get(temp_config_file):
     # 階層化された設定値を取得
     assert config.get(['database', 'url']) == 'sqlite:///data/ebay_research.db'
     assert config.get(['database', 'echo']) is False
+    assert config.get(['ebay', 'login', 'username_env']) == 'EBAY_USERNAME'
     
     # デフォルト値をテスト
+    assert config.get(['nonexistent'], 'default') == 'default'
     assert config.get(['nonexistent', 'key'], 'default') == 'default'
 
 def test_get_from_env(monkeypatch, temp_config_file):
