@@ -18,11 +18,12 @@ class ConfigManager:
         """
         # 環境変数の読み込み
         load_dotenv()
+
+        self.base_dir = Path(__file__).parent.parent
         
         # 設定ファイルのパスを決定
         if config_path is None:
-            base_dir = Path(__file__).parent.parent
-            config_path = base_dir / 'config' / 'config.yaml'
+            config_path = self.base_dir / 'config' / 'config.yaml'
         else:
             config_path = Path(config_path)
             
@@ -34,8 +35,6 @@ class ConfigManager:
         with open(config_path, 'r', encoding='utf-8') as file:
             self.config = yaml.safe_load(file)
             
-        self.base_dir = base_dir
-    
     def get(self, keys, default=None):
         """
         設定値を取得する
@@ -47,7 +46,7 @@ class ConfigManager:
         Returns:
             設定値、またはデフォルト値
         """
-        return reduce(lambda dict, key: dict.get(key, default), keys, self.config)
+        return reduce(lambda d, key: d[key] if isinstance(d, dict) and key in d else default, keys, self.config)
     
     def get_path(self, keys):
         """

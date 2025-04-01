@@ -73,7 +73,8 @@ class DataExporter:
         df = pd.DataFrame(results)
         
         # 列名の日本語化または整形（必要に応じて）
-        df = self._format_columns(df)
+        # 一旦機能OFF。ONにする場合はexport_to_csv/excel/google_sheetsの中でも実行する
+        # df = self._format_columns(df)
         
         # 出力ファイルパスが指定されていない場合は自動生成
         if file_path is None:
@@ -120,11 +121,18 @@ class DataExporter:
             if not isinstance(data, pd.DataFrame):
                 data = pd.DataFrame(data)
                 
+            if data.empty:
+                logger.error("エクスポートする結果がありません")
+                return None
+            
             # 出力ファイルパスの設定
             if file_path is None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 file_path = self.output_dir / f"ebay_results_{timestamp}.csv"
             else:
+                if not file_path:
+                    logger.error("無効なファイルパスが指定されました")
+                    return None
                 file_path = Path(file_path)
                 
             # CSVに出力
@@ -156,11 +164,18 @@ class DataExporter:
             if not isinstance(data, pd.DataFrame):
                 data = pd.DataFrame(data)
                 
+            if data.empty:
+                logger.error("エクスポートする結果がありません")
+                return None
+            
             # 出力ファイルパスの設定
             if file_path is None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 file_path = self.output_dir / f"ebay_results_{timestamp}.xlsx"
             else:
+                if not file_path:
+                    logger.error("無効なファイルパスが指定されました")
+                    return None
                 file_path = Path(file_path)
                 
             # Excelに出力
