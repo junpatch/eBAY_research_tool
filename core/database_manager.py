@@ -1,7 +1,7 @@
 # データベースマネージャークラス
 
 import copy
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
 from models.data_models import Base, Keyword, EbaySearchResult, SearchHistory, ExportHistory
 from contextlib import contextmanager
@@ -24,6 +24,12 @@ class DatabaseManager:
         self.engine = create_engine(db_url, echo=echo)
         self.SessionFactory = sessionmaker(bind=self.engine)
         self.Session = scoped_session(self.SessionFactory)
+        
+    def close(self):
+        """データベース接続を閉じる"""
+        self.Session.remove()
+        self.engine.dispose()
+        logger.info("データベース接続を閉じました。")
         
     def create_tables(self):
         """テーブルの作成"""
@@ -59,7 +65,7 @@ class DatabaseManager:
             category (str, optional): カテゴリ
             
         Returns:
-            Keyword: 新しく追加されたキーワード
+            int: 新しく追加されたキーワードのID
         """
         with self.session_scope() as session:
             # 既存のキーワードを確認
@@ -73,7 +79,8 @@ class DatabaseManager:
                 status='active'
             )
             session.add(new_keyword)
-            return new_keyword
+            session.flush()  # IDを取得するためにflush
+            return new_keyword.id
     
     def add_keywords_bulk(self, keywords):
         """
