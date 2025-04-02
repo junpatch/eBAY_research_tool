@@ -49,12 +49,26 @@ class TestConfigChangeFlow:
                 "url": "sqlite:///:memory:",
                 "echo": False
             },
-            "ebay_scraper": {
+            "ebay": {
                 "base_url": "https://www.ebay.com",
+                "search": {
+                    "timeout": 30,
+                    "request_delay": 2,
+                    "max_pages": 2,
+                    "items_per_page": 50
+                },
+                "login": {
+                    "username_env": "EBAY_USERNAME",
+                    "password_env": "EBAY_PASSWORD"
+                }
+            },
+            "scraping": {
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "timeout": 10,
-                "retry_count": 3,
-                "delay_between_requests": 1.0
+                "headless": True,
+                "proxy": {
+                    "enabled": False,
+                    "url": None
+                }
             },
             "export": {
                 "default_format": "csv",
@@ -78,7 +92,12 @@ class TestConfigChangeFlow:
             config_data = yaml.safe_load(f)
         
         # 指定されたセクションと項目を更新
-        config_data[section][key] = value
+        if isinstance(value, dict) and key in config_data[section] and isinstance(config_data[section][key], dict):
+            # ネストした辞書の場合は既存の辞書を更新
+            config_data[section][key].update(value)
+        else:
+            # 単一の値または新規辞書の場合は置き換え
+            config_data[section][key] = value
         
         # 変更を保存
         with open(self.config_path, 'w', encoding='utf-8') as f:
@@ -110,40 +129,59 @@ class TestConfigChangeFlow:
             assert config.get(['database', 'url']) == "sqlite:///test_new.db"
             assert db_manager.engine.url.render_as_string() == "sqlite:///test_new.db"
 
-    @patch('requests.Session')
-    def test_scraper_config_change(self, mock_session):
+    @patch('services.ebay_scraper.EbayScraper._make_request')
+    def test_scraper_config_change(self, mock_make_request):
         """スクレイパー設定変更のテスト"""
-        # 環境変数で設定ファイルのパスを指定
-        env_vars = {"CONFIG_PATH": str(self.config_path)}
+        # 環境変数で設定ファイルのパスと必要な環境変数を指定
+        env_vars = {
+            "CONFIG_PATH": str(self.config_path),
+            "EBAY_USERNAME": "test_user",
+            "EBAY_PASSWORD": "test_password"
+        }
         
-        # セッションのモック設定
-        mock_session_instance = MagicMock()
-        mock_session.return_value = mock_session_instance
+        # _make_requestメソッドのモック設定
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html><body>テスト結果</body></html>"
+        mock_make_request.return_value = mock_response
         
         # 最初の設定でConfigManagerとEbayScraperを初期化
         with temp_env_vars(env_vars):
-            config = ConfigManager()
+            # 明示的に設定パスを指定してConfigManagerを初期化
+            config = ConfigManager(str(self.config_path))
             
             with EbayScraper(config) as scraper:
-                # 初期設定値の確認
-                assert config.get(['ebay_scraper', 'timeout']) == 10
-                assert config.get(['ebay_scraper', 'retry_count']) == 3
-                assert config.get(['ebay_scraper', 'delay_between_requests']) == 1.0
+                # 初期設定値の確認（スクレイパーオブジェクトの属性値を直接確認）
+                print(f"初期設定: timeout={scraper.timeout/1000}, request_delay={scraper.request_delay}, max_pages={scraper.max_pages}, items_per_page={scraper.items_per_page}")
+                
+                # この時点での属性値をアサート
+                assert scraper.timeout == 30 * 1000  # ミリ秒単位で保存されているため
+                assert scraper.request_delay == 2
+                assert scraper.max_pages == 2
+                assert scraper.items_per_page == 50
         
         # スクレイパー設定を更新
-        self._update_config("ebay_scraper", "timeout", 20)
-        self._update_config("ebay_scraper", "retry_count", 5)
-        self._update_config("ebay_scraper", "delay_between_requests", 2.0)
+        self._update_config("ebay", "search", {
+            "timeout": 20,
+            "request_delay": 1.0,
+            "max_pages": 3,
+            "items_per_page": 100
+        })
         
         # 新しい設定でConfigManagerとEbayScraperを初期化
         with temp_env_vars(env_vars):
-            config = ConfigManager()
+            # 明示的に設定パスを指定してConfigManagerを初期化
+            config = ConfigManager(str(self.config_path))
             
             with EbayScraper(config) as scraper:
-                # 変更された設定値の確認
-                assert config.get(['ebay_scraper', 'timeout']) == 20
-                assert config.get(['ebay_scraper', 'retry_count']) == 5
-                assert config.get(['ebay_scraper', 'delay_between_requests']) == 2.0
+                # 更新後の設定値を確認（スクレイパーオブジェクトの属性値を直接確認）
+                print(f"更新後: timeout={scraper.timeout/1000}, request_delay={scraper.request_delay}, max_pages={scraper.max_pages}, items_per_page={scraper.items_per_page}")
+                
+                # 更新後の属性値をアサート
+                assert scraper.timeout == 20 * 1000  # ミリ秒単位で保存されているため
+                assert scraper.request_delay == 1.0
+                assert scraper.max_pages == 3
+                assert scraper.items_per_page == 100
 
     def test_export_config_change(self):
         """エクスポート設定変更のテスト"""
@@ -189,6 +227,6 @@ class TestConfigChangeFlow:
             config = ConfigManager()
             
             # 環境変数による上書きの確認
-            assert config.get_from_env(config.get(['ebay_scraper', 'base_url'])) == "https://www.ebay.co.jp"
+            assert config.get_from_env(config.get(['ebay', 'base_url'])) == "https://www.ebay.co.jp"
             assert config.get_from_env(config.get(['database', 'url'])) == "sqlite:///env_override.db"
             assert config.get_from_env(config.get(['export', 'default_format'])) == "json" 

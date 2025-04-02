@@ -85,14 +85,11 @@ class TestErrorHandlingFlow:
                 assert "connection error" in log_content
                 assert "ERROR" in log_content
 
-    @patch('requests.Session.get')
-    def test_scraping_error(self, mock_get):
+    @patch('services.ebay_scraper.EbayScraper._make_request')
+    def test_scraping_error(self, mock_make_request):
         """スクレイピングエラー時の挙動テスト"""
-        # requestsのgetメソッドで例外を発生させる
-        mock_response = MagicMock()
-        mock_response.status_code = 503
-        mock_response.raise_for_status.side_effect = Exception("Service Unavailable")
-        mock_get.return_value = mock_response
+        # _make_requestメソッドで例外を発生させる
+        mock_make_request.side_effect = Exception("Service Unavailable")
         
         # 環境変数を設定してロガーを初期化
         with temp_env_vars(self.env_vars):
@@ -184,21 +181,18 @@ class TestErrorHandlingFlow:
                 handler.close()
                 logging.getLogger().removeHandler(handler)
 
-    @patch('requests.Session.get')
-    def test_error_recovery(self, mock_get):
+    @patch('services.ebay_scraper.EbayScraper._make_request')
+    def test_error_recovery(self, mock_make_request):
         """エラー回復処理のテスト"""
         # 最初の呼び出しでは例外を発生、2回目は成功するように設定
-        mock_error_response = MagicMock()
-        mock_error_response.status_code = 500
-        mock_error_response.raise_for_status.side_effect = Exception("Internal Server Error")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html><body>テスト結果</body></html>"
         
-        mock_success_response = MagicMock()
-        mock_success_response.status_code = 200
-        mock_success_response.raise_for_status.return_value = None
-        mock_success_response.text = "<html><body>テスト結果</body></html>"
-        
-        # 2回の呼び出しで異なる応答を返すように設定
-        mock_get.side_effect = [mock_error_response, mock_success_response]
+        mock_make_request.side_effect = [
+            Exception("Internal Server Error"),
+            mock_response
+        ]
         
         # 環境変数を設定してロガーを初期化
         with temp_env_vars(self.env_vars):
