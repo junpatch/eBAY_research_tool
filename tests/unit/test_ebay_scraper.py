@@ -16,7 +16,9 @@ def mock_config():
         ('ebay', 'password'): 'test_pass',
         ('scraping', 'headless'): True,
         ('scraping', 'user_agent'): 'test_agent',
-        ('ebay', 'search', 'request_delay'): 3  # 2秒から3秒に変更
+        ('ebay', 'search', 'request_delay'): 3,  # 2秒から3秒に変更
+        ('database', 'url'): 'sqlite:///:memory:',
+        ('ebay', 'search', 'timeout'): 60,  # 60秒に変更
     }.get(tuple(path), default)
     return config
 
