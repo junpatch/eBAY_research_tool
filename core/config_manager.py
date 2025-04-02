@@ -23,9 +23,9 @@ class ConfigManager:
         
         # 設定ファイルのパスを決定
         if config_path is None:
-            config_path = self.base_dir / 'config' / 'config.yaml'
-        else:
-            config_path = Path(config_path)
+            config_path = os.environ.get('CONFIG_PATH', str(self.base_dir / 'config' / 'config.yaml'))
+        
+        config_path = Path(config_path)
             
         # 設定ファイルの存在確認
         if not config_path.exists():
@@ -35,18 +35,36 @@ class ConfigManager:
         with open(config_path, 'r', encoding='utf-8') as file:
             self.config = yaml.safe_load(file)
             
-    def get(self, keys, default=None):
+    def get(self, keys, default=None, value_type=None):
         """
         設定値を取得する
         
         Args:
             keys (list): 設定セクションとキーのリスト
             default: キーが存在しない場合のデフォルト値
+            value_type (type, optional): 期待される値の型
             
         Returns:
             設定値、またはデフォルト値
         """
-        return reduce(lambda d, key: d[key] if isinstance(d, dict) and key in d else default, keys, self.config)
+        if not isinstance(keys, (list, tuple)):
+            keys = [keys]
+            
+        result = self.config
+        for key in keys:
+            if not isinstance(result, dict):
+                return default
+            if key not in result:
+                return default
+            result = result[key]
+        
+        if value_type and result is not None:
+            try:
+                return value_type(result)
+            except (ValueError, TypeError):
+                return default
+                
+        return result
     
     def get_path(self, keys):
         """
@@ -69,6 +87,32 @@ class ConfigManager:
         # 相対パスの場合はベースディレクトリからの相対パスとする
         return (self.base_dir / path_str).resolve()
     
+    def get_with_env(self, keys, env_var_name, default=None, value_type=None):
+        """
+        環境変数と設定ファイルから値を取得する（環境変数が優先）
+        
+        Args:
+            keys (list): 設定セクションとキーのリスト
+            env_var_name (str): 環境変数名
+            default: デフォルト値
+            value_type (type, optional): 期待される値の型
+            
+        Returns:
+            環境変数の値、設定値、またはデフォルト値
+        """
+        # 環境変数から取得
+        env_value = self.get_from_env(env_var_name, None)
+        if env_value is not None:
+            if value_type:
+                try:
+                    return value_type(env_value)
+                except (ValueError, TypeError):
+                    pass
+            return env_value
+        
+        # 設定ファイルから取得
+        return self.get(keys, default, value_type)
+    
     def get_from_env(self, env_var_name, default=None):
         """
         環境変数から値を取得する
@@ -80,6 +124,8 @@ class ConfigManager:
         Returns:
             環境変数の値、またはデフォルト値
         """
+        if env_var_name is None:
+            return default
         return os.environ.get(env_var_name, default)
     
     def get_db_url(self):
@@ -89,8 +135,13 @@ class ConfigManager:
         Returns:
             str: SQLAlchemy接続URL
         """
-        db_type = self.get(['database', 'type'], 'sqlite')
-        
+        # 環境変数または設定ファイルからURLを取得
+        db_url = self.get_with_env(['database', 'url'], 'DB_URL', None, str)
+        if db_url:
+            return db_url
+            
+        # デフォルトのSQLite設定を使用
+        db_type = self.get(['database', 'type'], 'sqlite', str)
         if db_type == 'sqlite':
             db_path = self.get_path(['database', 'path'])
             if db_path is None:
@@ -101,5 +152,4 @@ class ConfigManager:
             
             return f"sqlite:///{db_path}"
         
-        # 将来的に他のデータベースタイプ（PostgreSQL、MySQLなど）に対応可能
         raise ValueError(f"サポートされていないデータベースタイプ: {db_type}")

@@ -221,6 +221,6 @@ class TestConfigChangeFlow:
             config = ConfigManager()
             
             # 環境変数による上書きの確認
-            assert config.get_from_env(config.get(['ebay', 'base_url'])) == "https://www.ebay.co.jp"
-            assert config.get_from_env(config.get(['database', 'url'])) == "sqlite:///env_override.db"
-            assert config.get_from_env(config.get(['export', 'default_format'])) == "json" 
+            assert config.get_from_env("EBAY_BASE_URL", config.get(['ebay', 'base_url'])) == "https://www.ebay.co.jp"
+            assert config.get_from_env("DB_URL", config.get(['database', 'url'])) == "sqlite:///env_override.db"
+            assert config.get_from_env("EXPORT_FORMAT", config.get(['export', 'default_format'])) == "json" 
