@@ -199,8 +199,8 @@ def search_keywords(
                 try:
                     output_path = exporter.export_results(
                         job_id=job_id,
-                        format=output_format,
-                        file_path=output_file
+                        output_format=output_format,
+                        output_path=output_file
                     )
                     
                     if output_path:
