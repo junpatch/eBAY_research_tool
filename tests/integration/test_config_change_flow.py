@@ -110,7 +110,7 @@ class TestConfigChangeFlow:
             assert config.get(['database', 'url']) == "sqlite:///test_new.db"
             assert db_manager.engine.url.render_as_string() == "sqlite:///test_new.db"
 
-    @patch('services.ebay_scraper.requests.Session')
+    @patch('requests.Session')
     def test_scraper_config_change(self, mock_session):
         """スクレイパー設定変更のテスト"""
         # 環境変数で設定ファイルのパスを指定

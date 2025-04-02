@@ -9,6 +9,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import random
 import os
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,9 @@ class EbayScraper:
         self.playwright = None
         self.browser = None
         self.context = None
+        
+        # requestsモジュールをクラス属性として保持
+        self.requests = requests
         
     def start_browser(self):
         """

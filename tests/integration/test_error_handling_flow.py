@@ -85,7 +85,7 @@ class TestErrorHandlingFlow:
                 assert "connection error" in log_content
                 assert "ERROR" in log_content
 
-    @patch('services.ebay_scraper.requests.Session.get')
+    @patch('requests.Session.get')
     def test_scraping_error(self, mock_get):
         """スクレイピングエラー時の挙動テスト"""
         # requestsのgetメソッドで例外を発生させる
@@ -184,7 +184,7 @@ class TestErrorHandlingFlow:
                 handler.close()
                 logging.getLogger().removeHandler(handler)
 
-    @patch('services.ebay_scraper.requests.Session.get')
+    @patch('requests.Session.get')
     def test_error_recovery(self, mock_get):
         """エラー回復処理のテスト"""
         # 最初の呼び出しでは例外を発生、2回目は成功するように設定
