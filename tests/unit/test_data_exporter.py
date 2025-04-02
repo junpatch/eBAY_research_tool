@@ -80,8 +80,8 @@ def test_export_results(data_exporter, mock_db):
                 path = tmp_path / f"test_export{file_ext}"
                 
                 result = data_exporter.export_results(
-                    format=format_type,
-                    file_path=str(path),
+                    output_format=format_type,
+                    output_path=str(path),
                     results=data
                 )
                 assert result == str(path)
@@ -106,8 +106,8 @@ def test_export_results(data_exporter, mock_db):
                 mock_sheets.return_value = mock_sheets_instance
 
                 result = data_exporter.export_results(
-                    format="google_sheets",
-                    file_path="test_spreadsheet",
+                    output_format="google_sheets",
+                    output_path="test_spreadsheet",
                     results=data
                 )
                 expected_url = "https://docs.google.com/spreadsheets/d/test_spreadsheet_id"
@@ -123,13 +123,13 @@ def test_export_results(data_exporter, mock_db):
                 param_name = case["param"]
                 param_value = case["value"]
                 params = {
-                    "format": "csv",
-                    "file_path": str(tmp_path / "test_id_export.csv"),
+                    "output_format": "csv",
+                    "output_path": str(tmp_path / "test_id_export.csv"),
                     param_name: param_value
                 }
                 
                 result = data_exporter.export_results(**params)
-                assert result == params["file_path"]
+                assert result == params["output_path"]
                 
                 # get_results_from_dbの呼び出しパラメータを検証
                 keyword_id = param_value if param_name == "keyword_id" else None
@@ -161,11 +161,11 @@ def test_export_results(data_exporter, mock_db):
                     # 各エクスポートメソッドをモック化してファイルパスをキャプチャ
                     with patch.object(data_exporter, f'export_to_{format_type}', return_value=f"mocked_{format_type}_path") as mock_export:
                         data_exporter.export_results(
-                            format=format_type,
+                            output_format=format_type,
                             keyword_id=keyword_id,
                             job_id=job_id,
                             results=data,
-                            file_path=None  # 自動生成させる
+                            output_path=None  # 自動生成させる
                         )
                         
                         mock_export.assert_called_once()
@@ -186,9 +186,9 @@ def test_export_results(data_exporter, mock_db):
                 
                 with patch.object(data_exporter, 'export_to_google_sheets', return_value="mocked_sheets_url") as mock_export_sheets:
                     data_exporter.export_results(
-                        format="google_sheets",
+                        output_format="google_sheets",
                         results=data,
-                        file_path=None  # 自動生成させる
+                        output_path=None  # 自動生成させる
                     )
                     
                     mock_export_sheets.assert_called_once()
@@ -200,8 +200,8 @@ def test_export_results(data_exporter, mock_db):
             
             # ケース6: formatが指定されていない場合（デフォルト値が使用される）
             result = data_exporter.export_results(
-                format=None,
-                file_path=str(tmp_path / "test_default_format.csv"),
+                output_format=None,
+                output_path=str(tmp_path / "test_default_format.csv"),
                 results=data
             )
             assert result is not None
@@ -209,8 +209,8 @@ def test_export_results(data_exporter, mock_db):
 
             # ケース7: formatが無効の場合
             result = data_exporter.export_results(
-                format="invalid",
-                file_path=str(tmp_path / "test_invalid_format.csv"),
+                output_format="invalid",
+                output_path=str(tmp_path / "test_invalid_format.csv"),
                 results=data
             )
             assert result is None
@@ -220,12 +220,12 @@ def test_export_results_error_handling(data_exporter, mock_db):
 
     # データ取得エラー
     mock_db.get_search_results.side_effect = Exception("Database error")
-    result = data_exporter.export_results(format="csv")
+    result = data_exporter.export_results(output_format="csv")
     assert result is None
     mock_db.get_search_results.side_effect = None
 
     # 無効なファイルパス（CSVの場合）
-    result = data_exporter.export_results(format="csv", file_path="")
+    result = data_exporter.export_results(output_format="csv", output_path="")
     assert result is None
 
     # Google Sheetsエラー
@@ -236,14 +236,14 @@ def test_export_results_error_handling(data_exporter, mock_db):
 
         data = mock_db.get_search_results()
         result = data_exporter.export_results(
-            format="google_sheets",
-            file_path="Test Spreadsheet",
+            output_format="google_sheets",
+            output_path="Test Spreadsheet",
             results=data
         )
         assert result is None
 
     # resultsがNoneで、keyword_idもjob_idも指定されていない場合
-    result = data_exporter.export_results(format="csv")
+    result = data_exporter.export_results(output_format="csv")
     assert result is None
 
 def test_export_to_csv(data_exporter, mock_db, tmp_path):
