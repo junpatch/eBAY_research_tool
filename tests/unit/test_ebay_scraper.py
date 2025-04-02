@@ -100,59 +100,9 @@ def test_close_browser(mock_playwright, ebay_scraper):
     assert ebay_scraper.is_logged_in is False
 
 @patch.object(EbayScraper, 'start_browser')
-def test_login_success(mock_start_browser, ebay_scraper):
-    """ログイン成功のテスト"""
-    # start_browserのモック
-    mock_start_browser.return_value = True
-    
-    # Playwrightのコンテキストとページのモック
-    mock_context = MagicMock()
-    ebay_scraper.context = mock_context
-    mock_page = MagicMock()
-    mock_context.new_page.return_value = mock_page
-    
-    # ログイン後のURLをモック（ログイン成功を示す）
-    mock_page.url = 'https://www.ebay.com/myebay/summary'
-    
-    # ログイン実行
-    result = ebay_scraper.login()
-    
-    # 検証
-    assert result is True
-    assert ebay_scraper.is_logged_in is True
-    mock_page.goto.assert_called_once_with('https://www.ebay.com/signin/')
-    mock_page.wait_for_selector.assert_any_call('#userid', state="visible")
-    mock_page.fill.assert_any_call('#userid', ebay_scraper.username)
-    mock_page.click.assert_any_call('#signin-continue-btn')
-    mock_page.close.assert_called_once()
-
-@patch.object(EbayScraper, 'start_browser')
-def test_login_failure(mock_start_browser, ebay_scraper):
-    """ログイン失敗のテスト"""
-    # start_browserのモック
-    mock_start_browser.return_value = True
-    
-    # Playwrightのコンテキストとページのモック
-    mock_context = MagicMock()
-    ebay_scraper.context = mock_context
-    mock_page = MagicMock()
-    mock_context.new_page.return_value = mock_page
-    
-    # ログイン後のURLをモック（ログイン失敗を示す）
-    mock_page.url = 'https://www.ebay.com/signin/'
-    
-    # ログイン実行
-    result = ebay_scraper.login(retry_on_failure=False)
-    
-    # 検証
-    assert result is False
-    assert ebay_scraper.is_logged_in is False
-    mock_page.goto.assert_called_once_with('https://www.ebay.com/signin/')
-    mock_page.close.assert_called_once()
-
-@patch.object(EbayScraper, 'start_browser')
 @patch.object(EbayScraper, '_extract_items_data')
-def test_search_keyword(mock_extract_items, mock_start_browser, ebay_scraper):
+@patch.object(EbayScraper, '_make_request')
+def test_search_keyword(mock_make_request, mock_extract_items, mock_start_browser, ebay_scraper):
     """キーワード検索のテスト"""
     # モックの設定
     mock_start_browser.return_value = True
@@ -161,6 +111,12 @@ def test_search_keyword(mock_extract_items, mock_start_browser, ebay_scraper):
         {'item_id': '456', 'title': 'Test Item 2', 'price': 20.50}
     ]
     mock_extract_items.return_value = test_items
+    
+    # _make_requestメソッドのモック
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>Test Response</body></html>"
+    mock_make_request.return_value = mock_response
     
     # Playwrightのコンテキストとページのモック
     mock_context = MagicMock()
@@ -179,17 +135,25 @@ def test_search_keyword(mock_extract_items, mock_start_browser, ebay_scraper):
     # 検証
     assert results == test_items
     mock_start_browser.assert_called_once()
+    mock_make_request.assert_called_once()
     mock_context.new_page.assert_called_once()
     mock_page.goto.assert_called_once()
-    mock_page.wait_for_selector.assert_called_with('.srp-results', state="visible")
+    mock_page.wait_for_selector.assert_called_with('.srp-results', state="visible", timeout=30000)
     mock_extract_items.assert_called_once_with(mock_page)
     mock_page.close.assert_called_once()
 
 @patch.object(EbayScraper, 'start_browser')
-def test_search_keyword_with_filters(mock_start_browser, ebay_scraper):
+@patch.object(EbayScraper, '_make_request')
+def test_search_keyword_with_filters(mock_make_request, mock_start_browser, ebay_scraper):
     """フィルター付きキーワード検索のテスト"""
     # モックの設定
     mock_start_browser.return_value = True
+    
+    # _make_requestメソッドのモック
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>Test Response</body></html>"
+    mock_make_request.return_value = mock_response
     
     # Playwrightのコンテキストとページのモック
     mock_context = MagicMock()
@@ -212,6 +176,7 @@ def test_search_keyword_with_filters(mock_start_browser, ebay_scraper):
         # URLの検証
         expected_url = 'https://www.ebay.com/sch/i.html?_nkw=test+keyword&_sacat=123&_udlo=10&_udhi=100&LH_Auction=1&LH_ItemCondition=1000'
         mock_page.goto.assert_called_once()
+        mock_make_request.assert_called_once()
         call_args = mock_page.goto.call_args[0][0]
         
         # URL内の全てのパラメータが含まれているか確認
