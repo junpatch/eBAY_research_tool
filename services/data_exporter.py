@@ -43,23 +43,24 @@ class DataExporter:
         # デフォルトの出力形式
         self.default_format = self.config.get(['export', 'default_format'], 'csv')
         
-    def export_results(self, results=None, keyword_id=None, job_id=None, format=None, file_path=None):
+    def export_results(self, output_format=None, output_path=None, filters=None, results=None, keyword_id=None, job_id=None):
         """
         検索結果をエクスポートする
         
         Args:
+            output_format (str, optional): 出力形式（csv, excel, google_sheets）
+            output_path (str, optional): 出力ファイルパス
+            filters (dict, optional): 結果のフィルタリング条件
             results (list, optional): エクスポートする結果のリスト。指定がなければDBから取得。
             keyword_id (int, optional): 特定のキーワードIDの結果をエクスポートする場合に指定
             job_id (int, optional): 特定のジョブIDの結果をエクスポートする場合に指定
-            format (str, optional): 出力形式（csv, excel, google_sheets）
-            file_path (str, optional): 出力ファイルパス
             
         Returns:
             str: エクスポートされたファイルのパス、またはGoogle SheetのURL
         """
         # 出力形式が指定されていない場合はデフォルトを使用
-        if format is None:
-            format = self.default_format
+        if output_format is None:
+            output_format = self.default_format
         
         # 結果が指定されておらず、キーワードIDまたはジョブIDが指定されている場合はDBから取得
         if results is None and (keyword_id or job_id):
@@ -77,7 +78,7 @@ class DataExporter:
         # df = self._format_columns(df)
         
         # 出力ファイルパスが指定されていない場合は自動生成
-        if file_path is None:
+        if output_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
             if keyword_id:
@@ -87,22 +88,22 @@ class DataExporter:
             else:
                 filename = f"ebay_results_{timestamp}"
                 
-            if format.lower() == 'csv':
-                file_path = self.output_dir / f"{filename}.csv"
-            elif format.lower() == 'excel':
-                file_path = self.output_dir / f"{filename}.xlsx"
-            elif format.lower() == 'google_sheets':
-                file_path = filename
+            if output_format.lower() == 'csv':
+                output_path = self.output_dir / f"{filename}.csv"
+            elif output_format.lower() == 'excel':
+                output_path = self.output_dir / f"{filename}.xlsx"
+            elif output_format.lower() == 'google_sheets':
+                output_path = filename
                 
         # 形式に応じてエクスポート
-        if format.lower() == 'csv':
-            return self.export_to_csv(df, file_path)
-        elif format.lower() == 'excel':
-            return self.export_to_excel(df, file_path)
-        elif format.lower() == 'google_sheets':
-            return self.export_to_google_sheets(df, file_path)
+        if output_format.lower() == 'csv':
+            return self.export_to_csv(df, output_path)
+        elif output_format.lower() == 'excel':
+            return self.export_to_excel(df, output_path)
+        elif output_format.lower() == 'google_sheets':
+            return self.export_to_google_sheets(df, output_path)
         else:
-            logger.error(f"サポートされていない形式です: {format}")
+            logger.error(f"サポートされていない形式です: {output_format}")
             return None
     
     def export_to_csv(self, data, file_path=None):
