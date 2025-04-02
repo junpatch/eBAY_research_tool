@@ -10,48 +10,120 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 import random
 import os
 import requests
+import urllib.parse
 
 logger = logging.getLogger(__name__)
+
+# ユーザーエージェントリスト
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
+]
+
+# 共通のヘッダー情報
+COMMON_HEADERS = {
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'DNT': '1',
+}
 
 class EbayScraper:
     """
     Playwrightを使用してeBayのデータをスクレイピングするクラス
     """
     
-    def __init__(self, config_manager):
+    def __init__(self, config=None):
         """
-        スクレイパーの初期化
+        EbayScraperの初期化
         
         Args:
-            config_manager: 設定マネージャーのインスタンス
+            config (dict, optional): 設定情報
         """
-        self.config = config_manager
-        self.base_url = self.config.get(['ebay', 'base_url'], 'https://www.ebay.com')
-        self.country = self.config.get(['ebay', 'country'], 'US')
-        self.headless = self.config.get(['scraping', 'headless'], True)
-        self.user_agent = self.config.get(['scraping', 'user_agent'])
-        self.timeout = self.config.get(['ebay', 'search', 'timeout'], 30) * 1000  # ミリ秒単位
-        self.request_delay = self.config.get(['ebay', 'search', 'request_delay'], 2)
-        self.max_pages = self.config.get(['ebay', 'search', 'max_pages'], 2)
-        self.items_per_page = self.config.get(['ebay', 'search', 'items_per_page'], 50)
-        self.proxy_enabled = self.config.get(['scraping', 'proxy', 'enabled'], False)
-        self.proxy_url = self.config.get(['scraping', 'proxy', 'url'], '')
+        self.config = config or {}
+        self.base_url = self.config.get(('ebay', 'base_url'), "https://www.ebay.com")
+        self.max_pages = self.config.get(('scraping', 'max_pages'), 2)
+        self.request_delay = self.config.get(('ebay', 'search', 'request_delay'), 3)
+        self.timeout = self.config.get(('scraping', 'timeout'), 60000)  # タイムアウトを60秒に設定
+        self.headless = self.config.get(('scraping', 'headless'), True)
+        self.proxy_enabled = self.config.get(('proxy', 'enabled'), False)
+        self.proxy_url = self.config.get(('proxy', 'url'), None)
+        
+        # ブラウザとコンテキストの初期化
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.user_agent = None
+        self.is_logged_in = False
+        
+        # 追加のヘッダー情報
+        self.additional_headers = {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-cache'
+        }
         
         # ログイン情報
         self.username = self.config.get_from_env(self.config.get(['ebay', 'login', 'username_env']))
         self.password = self.config.get_from_env(self.config.get(['ebay', 'login', 'password_env']))
         
-        # ログイン状態を管理
-        self.is_logged_in = False
-        
-        # Playwrightインスタンス
-        self.playwright = None
-        self.browser = None
-        self.context = None
-        
         # requestsモジュールをクラス属性として保持
         self.requests = requests
         
+    def _get_random_user_agent(self):
+        """
+        ランダムなユーザーエージェントを返す
+        
+        Returns:
+            str: ランダムなユーザーエージェント文字列
+        """
+        default_ua = self.config.get(['scraping', 'user_agent'])
+        if default_ua and random.random() < 0.3:  # 30%の確率で設定ファイルのUAを使用
+            return default_ua
+        return random.choice(USER_AGENTS)
+    
+    def _get_request_headers(self):
+        """
+        リクエスト用のヘッダーを取得
+        
+        Returns:
+            dict: ヘッダー情報
+        """
+        headers = COMMON_HEADERS.copy()
+        headers['User-Agent'] = self._get_random_user_agent()
+        # リクエストのたびに少しずつ異なるRefererを使用
+        if random.random() < 0.5:  # 50%の確率でリファラーを含める
+            referers = [
+                'https://www.google.com/',
+                'https://www.bing.com/',
+                f"{self.base_url}/",
+                None
+            ]
+            referer = random.choice(referers)
+            if referer:
+                headers['Referer'] = referer
+        
+        return headers
+    
     def start_browser(self):
         """
         ブラウザを起動し、新しいコンテキストを作成する
@@ -69,7 +141,22 @@ class EbayScraper:
             
             # ブラウザ起動オプションの設定
             browser_options = {
-                "headless": self.headless
+                "headless": self.headless,
+                "args": [
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--disable-site-isolation-trials",
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-gpu",
+                    "--disable-infobars",
+                    "--window-size=1920,1080",
+                    "--start-maximized",
+                    "--ignore-certificate-errors",
+                    "--disable-accelerated-2d-canvas",
+                    "--disable-notifications"
+                ]
             }
             
             # プロキシ設定（必要な場合）
@@ -83,10 +170,24 @@ class EbayScraper:
             
             # コンテキスト作成オプション
             context_options = {
-                "viewport": {"width": 1280, "height": 800}
+                "viewport": {"width": 1920, "height": 1080},
+                "screen": {"width": 1920, "height": 1080},
+                "ignore_https_errors": True,
+                "java_script_enabled": True,
+                "bypass_csp": True,
+                "has_touch": True,
+                "is_mobile": False,
+                "locale": "en-US",
+                "timezone_id": "America/New_York",
+                "permissions": ["geolocation"],
+                "color_scheme": "light",
+                "reduced_motion": "no-preference",
+                "forced_colors": "none",
+                "extra_http_headers": self.additional_headers
             }
             
             # ユーザーエージェント設定
+            self.user_agent = self._get_random_user_agent()
             if self.user_agent:
                 context_options["user_agent"] = self.user_agent
                 
@@ -95,6 +196,62 @@ class EbayScraper:
             
             # タイムアウト設定
             self.context.set_default_timeout(self.timeout)
+            
+            # ランダムなJavaScriptフォントとプラグイン指紋情報を設定（指紋対策）
+            if random.random() < 0.7:  # 70%の確率で偽装を行う
+                self.context.add_init_script("""
+                    // Webdriver検出の回避
+                    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+                    
+                    // ランダムなCanvas指紋を生成
+                    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+                    HTMLCanvasElement.prototype.getContext = function(type) {
+                        const context = originalGetContext.apply(this, arguments);
+                        if (type === '2d') {
+                            const originalFillText = context.fillText;
+                            context.fillText = function() {
+                                context.shadowColor = `rgb(${Math.floor(Math.random()*255)},${Math.floor(Math.random()*255)},${Math.floor(Math.random()*255)})`;
+                                return originalFillText.apply(this, arguments);
+                            };
+                        }
+                        return context;
+                    };
+                    
+                    // プラグイン情報の偽装
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => [
+                            {
+                                0: {type: "application/x-google-chrome-pdf", suffixes: "pdf", description: "Portable Document Format"},
+                                description: "Portable Document Format",
+                                filename: "internal-pdf-viewer",
+                                length: 1,
+                                name: "Chrome PDF Plugin"
+                            }
+                        ]
+                    });
+                    
+                    // 言語設定の偽装
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['en-US', 'en']
+                    });
+                    
+                    // プラットフォーム情報の偽装
+                    Object.defineProperty(navigator, 'platform', {
+                        get: () => 'Win32'
+                    });
+                    
+                    // WebGL指紋の偽装
+                    const getParameter = WebGLRenderingContext.prototype.getParameter;
+                    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                        if (parameter === 37445) {
+                            return 'Intel Inc.'
+                        }
+                        if (parameter === 37446) {
+                            return 'Intel(R) Iris(TM) Graphics 6100'
+                        }
+                        return getParameter.apply(this, [parameter]);
+                    };
+                """)
             
             logger.info("ブラウザを起動しました")
             return True
@@ -199,153 +356,193 @@ class EbayScraper:
                 return self.login(retry_on_failure=False)
             return False
     
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10),
            retry=retry_if_exception_type((PlaywrightTimeoutError, ConnectionError)))
     def search_keyword(self, keyword, category=None, condition=None, listing_type=None, min_price=None, max_price=None):
         """
-        eBayで指定したキーワードで検索を実行し、結果を取得する
+        キーワードで商品を検索する
         
         Args:
             keyword (str): 検索キーワード
-            category (str, optional): カテゴリID
-            condition (str, optional): 商品の状態（new, used等）
-            listing_type (str, optional): リスティングタイプ（auction, fixed等）
+            category (str, optional): カテゴリーID
+            condition (str, optional): 商品の状態
+            listing_type (str, optional): 出品タイプ
             min_price (float, optional): 最低価格
             max_price (float, optional): 最高価格
             
         Returns:
+            list: 検索結果のアイテムリスト
+        """
+        try:
+            # ブラウザが起動していない場合は起動
+            if not self.browser or not self.context:
+                if not self.start_browser():
+                    logger.error("ブラウザの起動に失敗しました")
+                    return []
+            
+            # 検索URLの構築
+            params = {
+                '_nkw': keyword,
+                '_ipg': 60,  # 1ページあたりの表示件数を100件に制限
+            }
+            
+            # カテゴリーの追加
+            if category:
+                params['_sacat'] = category
+                
+            # 価格範囲の追加
+            if min_price is not None:
+                params['_udlo'] = min_price
+            if max_price is not None:
+                params['_udhi'] = max_price
+                
+            # 商品の状態
+            if condition:
+                condition_map = {
+                    'new': '1000',
+                    'used': '3000',
+                    'not_specified': '10'
+                }
+                if condition.lower() in condition_map:
+                    params['LH_ItemCondition'] = condition_map[condition.lower()]
+                    
+            # 出品タイプ
+            if listing_type:
+                listing_type_map = {
+                    'auction': ('LH_Auction', '1'),
+                    'buy_it_now': ('LH_BIN', '1'),
+                    'best_offer': ('LH_BO', '1')
+                }
+                if listing_type.lower() in listing_type_map:
+                    param_key, param_value = listing_type_map[listing_type.lower()]
+                    params[param_key] = param_value
+            
+            all_items = []
+            current_page = 1
+            max_retries = 3
+            
+            while current_page <= self.max_pages:
+                try:
+                    # ページ番号を追加
+                    params['_pgn'] = current_page
+                    
+                    # 検索URLの生成
+                    search_url = f"{self.base_url}/sch/i.html"
+                    # 日本語キーワードの特別なエンコード処理
+                    encoded_params = {}
+                    for k, v in params.items():
+                        if k == '_nkw':
+                            # 日本語キーワードの場合は特別なエンコード処理
+                            encoded_params[k] = urllib.parse.quote(str(v), encoding='utf-8', safe='')
+                        else:
+                            encoded_params[k] = urllib.parse.quote(str(v))
+                    query_string = '&'.join([f"{k}={v}" for k, v in encoded_params.items()])
+                    url = f"{search_url}?{query_string}"
+                    
+                    logger.info(f"ページ {current_page} を処理中: {url}")
+                    
+                    # 新しいページを開く
+                    page = self.context.new_page()
+                    try:
+                        # 検索ページに移動
+                        page.goto(url)
+                        page.wait_for_selector('.srp-results', state="visible", timeout=self.timeout)
+                        
+                        # 商品データの抽出
+                        items = self._extract_items_data(page)
+                        
+                        if not items:  # アイテムが見つからない場合は終了
+                            logger.info(f"ページ {current_page} にアイテムが見つかりませんでした。検索を終了します。")
+                            break
+                            
+                        all_items.extend(items)
+                        logger.info(f"ページ {current_page} から {len(items)} 件のアイテムを抽出しました（合計: {len(all_items)} 件）")
+                        
+                        # 次のページが存在するか確認
+                        next_page = page.query_selector('.pagination__next:not(.disabled)')
+                        if not next_page:
+                            logger.info("最後のページに到達しました。")
+                            break
+                            
+                        # ページ間の待機時間（レート制限対策）
+                        delay = self.request_delay + random.uniform(1, 3)
+                        logger.debug(f"{delay:.2f}秒間待機します")
+                        time.sleep(delay)
+                        
+                    except PlaywrightTimeoutError as e:
+                        logger.warning(f"タイムアウトが発生しました: {str(e)}")
+                        self._save_debug_screenshot(page, f"{keyword}_page_{current_page}")
+                        if max_retries > 0:
+                            max_retries -= 1
+                            continue
+                        else:
+                            break
+                    except Exception as e:
+                        logger.error(f"ページ {current_page} の処理中にエラーが発生しました: {str(e)}")
+                        self._save_debug_screenshot(page, f"{keyword}_page_{current_page}")
+                        break
+                    finally:
+                        page.close()
+                        
+                    current_page += 1
+                    
+                except Exception as e:
+                    logger.error(f"ページ {current_page} の処理中にエラーが発生しました: {str(e)}")
+                    break
+                    
+            return all_items
+                
+        except Exception as e:
+            logger.error(f"検索処理中にエラーが発生しました: {str(e)}")
+            return []
+    
+    def _handle_search_page(self, page):
+        """
+        検索結果ページの処理を行う
+        
+        Args:
+            page: Playwrightのページオブジェクト
+            
+        Returns:
             list: 検索結果のリスト
         """
-        if not self.start_browser():
-            return []
-            
         try:
-            logger.info(f"キーワード '{keyword}' で検索を開始します")
-            
-            # 検索URLの構築
-            search_url = f"{self.base_url}/sch/i.html?_nkw={keyword.replace(' ', '+')}"
-            
-            # フィルターの追加
-            if category:
-                search_url += f"&_sacat={category}"
-            
-            if min_price and max_price:
-                search_url += f"&_udlo={min_price}&_udhi={max_price}"
-            elif min_price:
-                search_url += f"&_udlo={min_price}"
-            elif max_price:
-                search_url += f"&_udhi={max_price}"
-                
-            if listing_type:
-                if listing_type.lower() == 'auction':
-                    search_url += "&LH_Auction=1"
-                elif listing_type.lower() == 'fixed':
-                    search_url += "&LH_BIN=1"
-                    
-            if condition:
-                if condition.lower() == 'new':
-                    search_url += "&LH_ItemCondition=1000"
-                elif condition.lower() == 'used':
-                    search_url += "&LH_ItemCondition=3000"
-            
-            # APIモードが有効な場合はAPIを使用する（開発中の機能）
-            api_mode = self.config.get(['ebay', 'api', 'enabled'], False)
-            if api_mode:
-                logger.info("API検索モードを使用します")
-                try:
-                    # _make_requestメソッドを使用してHTTPリクエストを実行
-                    # これはテスト時にモック可能
-                    response = self._make_request(search_url)
-                    # レスポンスを解析して結果を返す処理（実装は別途必要）
-                    return []  # 仮の戻り値
-                except Exception as e:
-                    logger.error(f"API検索でエラーが発生しました: {e}")
-                    raise  # テスト時に例外を捕捉できるよう、例外を再スロー
-            
-            # Playwrightを使用した処理を行う前に、_make_requestをテスト用に呼び出す
-            # これにより、テスト時に_make_requestがモックされていれば例外が発生する
-            try:
-                self._make_request(search_url)
-            except Exception as e:
-                logger.error(f"リクエスト中にエラーが発生しました: {e}")
-                raise  # 例外を再スローして、テストでキャッチできるようにする
-            
-            # 新しいページを開く
-            page = self.context.new_page()
-            
-            # 検索URLの構築
-            search_url = f"{self.base_url}/sch/i.html?_nkw={keyword.replace(' ', '+')}"
-            
-            # フィルターの追加
-            if category:
-                search_url += f"&_sacat={category}"
-            
-            if min_price and max_price:
-                search_url += f"&_udlo={min_price}&_udhi={max_price}"
-            elif min_price:
-                search_url += f"&_udlo={min_price}"
-            elif max_price:
-                search_url += f"&_udhi={max_price}"
-                
-            if listing_type:
-                if listing_type.lower() == 'auction':
-                    search_url += "&LH_Auction=1"
-                elif listing_type.lower() == 'fixed':
-                    search_url += "&LH_BIN=1"
-                    
-            if condition:
-                if condition.lower() == 'new':
-                    search_url += "&LH_ItemCondition=1000"
-                elif condition.lower() == 'used':
-                    search_url += "&LH_ItemCondition=3000"
-            
-            # APIモードが有効な場合はAPIを使用する（開発中の機能）
-            api_mode = self.config.get(['ebay', 'api', 'enabled'], False)
-            if api_mode:
-                logger.info("API検索モードを使用します")
-                try:
-                    # APIを使用して検索する（実装は別途必要）
-                    response = self._make_request(search_url)
-                    # レスポンスを解析して結果を返す処理（実装は別途必要）
-                    return []  # 仮の戻り値
-                except Exception as e:
-                    logger.error(f"API検索でエラーが発生しました: {e}")
-                    # フォールバックとしてブラウザを使用する
-            
-            # 検索ページに移動
-            logger.info(f"検索URL: {search_url}")
-            page.goto(search_url)
-            
             # ページの読み込みを待機
-            page.wait_for_load_state('networkidle')
+            page.wait_for_load_state('networkidle', timeout=self.timeout)
+            
+            # スクロールを実行してページを完全に読み込む
+            self._scroll_page(page)
             
             # 国や言語の選択ダイアログが表示された場合の処理
-            if page.query_selector('button:has-text("Ship to")') or page.query_selector('button:has-text("Go to")'):
-                logger.info("国/地域の選択ダイアログが表示されました")
-                # 「現在のページにとどまる」または同様のボタンをクリック
-                if page.query_selector('button:has-text("Stay on")'):
-                    page.click('button:has-text("Stay on")')
-                elif page.query_selector('button:has-text("Ship to")'):
-                    page.click('button:has-text("Ship to")')
-                # ダイアログが閉じるのを待機
-                page.wait_for_load_state('networkidle')
+            try:
+                if page.query_selector('button:has-text("Ship to")') or page.query_selector('button:has-text("Go to")'):
+                    logger.info("国/地域の選択ダイアログが表示されました")
+                    # 「現在のページにとどまる」または同様のボタンをクリック
+                    if page.query_selector('button:has-text("Stay on")'):
+                        page.click('button:has-text("Stay on")')
+                    elif page.query_selector('button:has-text("Ship to")'):
+                        page.click('button:has-text("Ship to")')
+                    # ダイアログが閉じるのを待機
+                    page.wait_for_load_state('networkidle')
+            except Exception as e:
+                logger.warning(f"国/地域の選択ダイアログの処理中にエラーが発生しました: {e}")
             
             # 検索結果が表示されるまで待機
             page.wait_for_selector('.srp-results', state='visible', timeout=self.timeout)
             
             # ページ数の取得（可能な場合）
             total_pages = 1
-            pagination_element = page.query_selector('.pagination__items')
-            if pagination_element:
-                # ページネーションの最後のアイテムからページ数を取得
-                page_items = page.query_selector_all('.pagination__item')
-                if page_items and len(page_items) > 0:
-                    try:
+            try:
+                pagination_element = page.query_selector('.pagination__items')
+                if pagination_element:
+                    # ページネーションの最後のアイテムからページ数を取得
+                    page_items = page.query_selector_all('.pagination__item')
+                    if page_items and len(page_items) > 0:
                         last_page_text = page_items[-1].inner_text()
                         if last_page_text and last_page_text.isdigit():
                             total_pages = int(last_page_text)
-                    except Exception as e:
-                        logger.warning(f"ページ数の取得に失敗しました: {e}")
+            except Exception as e:
+                logger.warning(f"ページ数の取得に失敗しました: {e}")
             
             # 最大ページ数を設定値に制限
             total_pages = min(total_pages, self.max_pages)
@@ -360,24 +557,27 @@ class EbayScraper:
                     next_page_url = f"{search_url}&_pgn={page_num}"
                     logger.info(f"次のページに移動: {next_page_url}")
                     
-                    # 直接URLs.createを使用して次のページへ移動
                     try:
-                        # _make_requestメソッドを使用して次のページのHTMLを取得
-                        response = self._make_request(next_page_url)
-                        page.set_content(response.text)
+                        # 次のページへの移動を待機
+                        with page.expect_navigation(wait_until='networkidle', timeout=self.timeout):
+                            page.goto(next_page_url)
+                        # 検索結果が表示されるまで待機
+                        page.wait_for_selector('.srp-results', state='visible', timeout=self.timeout)
+                        # スクロールを実行してページを完全に読み込む
+                        self._scroll_page(page)
                     except Exception as e:
                         logger.error(f"次のページへの移動に失敗しました: {e}")
-                        page.goto(next_page_url)
+                        break
+                
+                try:
+                    # 現在のページのアイテムを抽出
+                    page_items = self._extract_items_data(page)
+                    all_items.extend(page_items)
                     
-                    # ページの読み込みを待機
-                    page.wait_for_load_state('networkidle')
-                    page.wait_for_selector('.srp-results', state='visible', timeout=self.timeout)
-                
-                # 現在のページのアイテムを抽出
-                page_items = self._extract_items_data(page)
-                all_items.extend(page_items)
-                
-                logger.info(f"ページ {page_num}/{total_pages} から {len(page_items)} 件のアイテムを抽出しました")
+                    logger.info(f"ページ {page_num}/{total_pages} から {len(page_items)} 件のアイテムを抽出しました")
+                except Exception as e:
+                    logger.error(f"ページ {page_num} のデータ抽出中にエラーが発生しました: {e}")
+                    break
                 
                 # 遅延を入れて連続アクセスを避ける
                 if page_num < total_pages:
@@ -385,28 +585,10 @@ class EbayScraper:
                     logger.debug(f"{delay:.2f}秒間待機します")
                     time.sleep(delay)
             
-            # 抽出結果のログを出力
-            logger.info(f"キーワード '{keyword}' の検索結果: {len(all_items)} 件のアイテムを抽出しました")
-            
-            # デバッグモードの場合はスクリーンショットを保存
-            debug_mode = self.config.get(['scraping', 'debug'], False)
-            if debug_mode:
-                self._save_debug_screenshot(page, keyword)
-            
-            # ページを閉じる
-            page.close()
-            
             return all_items
             
         except Exception as e:
-            logger.error(f"検索中にエラーが発生しました: {str(e)}")
-            # エラー発生時のスクリーンショット保存
-            try:
-                if 'page' in locals() and page:
-                    self._save_debug_screenshot(page, f"error_{keyword}")
-                    page.close()
-            except Exception:
-                pass
+            logger.error(f"検索結果ページの処理中にエラーが発生しました: {e}")
             raise
     
     def _extract_items_data(self, page):
@@ -581,65 +763,42 @@ class EbayScraper:
         except Exception as e:
             logger.error(f"スクリーンショットの保存中にエラーが発生しました: {e}")
     
-    def _make_request(self, url, method='get', **kwargs):
+    def _scroll_page(self, page):
         """
-        リクエストを実行するためのヘルパーメソッド
+        ページを下までスクロールして、すべてのコンテンツを読み込む
         
         Args:
-            url (str): リクエスト先のURL
-            method (str): HTTPメソッド（get, post, など）
-            **kwargs: requestsモジュールに渡す追加の引数
-            
-        Returns:
-            requests.Response: レスポンスオブジェクト
-            
-        Raises:
-            Exception: リクエスト失敗時に発生する例外
+            page: Playwrightのページオブジェクト
         """
-        logger.debug(f"{method.upper()} リクエスト: {url}")
-        
-        # セッション作成
-        session = self.requests.Session()
-        
-        # デフォルトのヘッダー設定
-        headers = {
-            'User-Agent': self.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        
-        # 引数のヘッダーを統合
-        if 'headers' in kwargs:
-            headers.update(kwargs.pop('headers'))
-        
-        # プロキシ設定（必要な場合）
-        proxies = None
-        if self.proxy_enabled and self.proxy_url:
-            proxies = {
-                'http': self.proxy_url,
-                'https': self.proxy_url
-            }
-        
-        # タイムアウト設定
-        timeout = kwargs.pop('timeout', self.timeout / 1000)  # ミリ秒を秒に変換
-        
         try:
-            # メソッドに応じてリクエストを実行
-            if method.lower() == 'get':
-                response = session.get(url, headers=headers, proxies=proxies, timeout=timeout, **kwargs)
-            elif method.lower() == 'post':
-                response = session.post(url, headers=headers, proxies=proxies, timeout=timeout, **kwargs)
-            else:
-                raise ValueError(f"サポートされていないHTTPメソッド: {method}")
+            # ページの高さを取得
+            page_height = page.evaluate("""() => {
+                return Math.max(
+                    document.body.scrollHeight,
+                    document.documentElement.scrollHeight,
+                    document.body.offsetHeight,
+                    document.documentElement.offsetHeight,
+                    document.body.clientHeight,
+                    document.documentElement.clientHeight
+                );
+            }""")
             
-            # ステータスコードチェック
-            response.raise_for_status()
+            # スクロール位置
+            current_position = 0
+            scroll_step = 100
             
-            # リクエスト成功
-            logger.debug(f"リクエスト成功: {url}, ステータスコード: {response.status_code}")
-            return response
+            while current_position < page_height:
+                # スクロール実行
+                page.evaluate(f"window.scrollTo(0, {current_position});")
+                # ランダムな待機時間（100-300ms）
+                time.sleep(random.uniform(0.1, 0.3))
+                current_position += scroll_step
+                
+            # ページトップに戻る（自然な動作をシミュレート）
+            page.evaluate("window.scrollTo(0, 0);")
             
         except Exception as e:
-            logger.error(f"リクエスト失敗: {url}, エラー: {e}")
-            raise
+            logger.warning(f"ページスクロール中にエラーが発生しました: {e}")
     
     def __enter__(self):
         """
