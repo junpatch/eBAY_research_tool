@@ -174,6 +174,15 @@ class TestErrorHandlingFlow:
                 assert "テスト例外: division by zero" in log_content
                 assert "ZeroDivisionError" in log_content
                 assert "Traceback" in log_content
+            
+            # テスト完了前にハンドラをクリーンアップ
+            if hasattr(logger_manager, 'file_handler') and logger_manager.file_handler:
+                logger_manager.file_handler.close()
+            
+            # すべてのハンドラを明示的に閉じる
+            for handler in logging.getLogger().handlers[:]:
+                handler.close()
+                logging.getLogger().removeHandler(handler)
 
     @patch('services.ebay_scraper.requests.Session.get')
     def test_error_recovery(self, mock_get):
