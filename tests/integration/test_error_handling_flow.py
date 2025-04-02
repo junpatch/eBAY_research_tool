@@ -15,6 +15,7 @@ import logging
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from core.config_manager import ConfigManager
 from core.database_manager import DatabaseManager
@@ -85,11 +86,11 @@ class TestErrorHandlingFlow:
                 assert "connection error" in log_content
                 assert "ERROR" in log_content
 
-    @patch('services.ebay_scraper.EbayScraper._make_request')
-    def test_scraping_error(self, mock_make_request):
+    @patch('services.ebay_scraper.EbayScraper.start_browser')
+    def test_scraping_error(self, mock_start_browser):
         """スクレイピングエラー時の挙動テスト"""
-        # _make_requestメソッドで例外を発生させる
-        mock_make_request.side_effect = Exception("Service Unavailable")
+        # start_browserメソッドで例外を発生させる
+        mock_start_browser.side_effect = PlaywrightTimeoutError("Service Unavailable")
         
         # 環境変数を設定してロガーを初期化
         with temp_env_vars(self.env_vars):
@@ -181,17 +182,13 @@ class TestErrorHandlingFlow:
                 handler.close()
                 logging.getLogger().removeHandler(handler)
 
-    @patch('services.ebay_scraper.EbayScraper._make_request')
-    def test_error_recovery(self, mock_make_request):
+    @patch('services.ebay_scraper.EbayScraper.start_browser')
+    def test_error_recovery(self, mock_start_browser):
         """エラー回復処理のテスト"""
         # 最初の呼び出しでは例外を発生、2回目は成功するように設定
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "<html><body>テスト結果</body></html>"
-        
-        mock_make_request.side_effect = [
-            Exception("Internal Server Error"),
-            mock_response
+        mock_start_browser.side_effect = [
+            PlaywrightTimeoutError("Internal Server Error"),
+            True
         ]
         
         # 環境変数を設定してロガーを初期化
@@ -207,7 +204,7 @@ class TestErrorHandlingFlow:
             
             # EbayScraperのsearch_keywordメソッドをパッチしてリトライ処理をテスト
             with patch.object(EbayScraper, 'search_keyword', side_effect=[
-                Exception("最初のエラー"),
+                PlaywrightTimeoutError("最初のエラー"),
                 [{"item_id": "123", "title": "リカバリーテスト商品"}]
             ]):
                 with EbayScraper(self.config) as scraper:

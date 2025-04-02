@@ -129,8 +129,8 @@ class TestConfigChangeFlow:
             assert config.get(['database', 'url']) == "sqlite:///test_new.db"
             assert db_manager.engine.url.render_as_string() == "sqlite:///test_new.db"
 
-    @patch('services.ebay_scraper.EbayScraper._make_request')
-    def test_scraper_config_change(self, mock_make_request):
+    @patch('services.ebay_scraper.EbayScraper.start_browser')
+    def test_scraper_config_change(self, mock_start_browser):
         """スクレイパー設定変更のテスト"""
         # 環境変数で設定ファイルのパスと必要な環境変数を指定
         env_vars = {
@@ -138,12 +138,6 @@ class TestConfigChangeFlow:
             "EBAY_USERNAME": "test_user",
             "EBAY_PASSWORD": "test_password"
         }
-        
-        # _make_requestメソッドのモック設定
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "<html><body>テスト結果</body></html>"
-        mock_make_request.return_value = mock_response
         
         # 最初の設定でConfigManagerとEbayScraperを初期化
         with temp_env_vars(env_vars):
