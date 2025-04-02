@@ -1,0 +1,39 @@
+{
+  "empty_result": {
+    "items": [],
+    "total_entries": 0,
+    "filters": {}
+  },
+  "missing_fields": {
+    "item_id": "987654321098",
+    "title": "不完全なデータを含む商品",
+    "price": null,
+    "currency": "JPY",
+    "shipping_price": null,
+    "seller_name": "unknown_seller",
+    "listing_type": "fixed_price"
+  },
+  "special_characters": {
+    "item_id": "456789012345",
+    "title": "特殊文字テスト商品 ★☆♪♫&<>\"'",
+    "description": "改行\nタブ\t特殊文字©®™",
+    "price": 1234.56,
+    "currency": "JPY"
+  },
+  "extreme_values": {
+    "item_id": "567890123456",
+    "title": "極端な値を持つ商品",
+    "price": 999999999.99,
+    "shipping_price": 0.01,
+    "stock_quantity": 999999,
+    "seller_rating": 100.0,
+    "seller_feedback_count": 9999999
+  },
+  "unicode_content": {
+    "item_id": "678901234567",
+    "title": "マルチ言語商品名 - Multi-language Title - 多语言标题",
+    "description": "日本語の説明\nEnglish description\n中文说明",
+    "price": 2000.0,
+    "currency": "JPY"
+  }
+} 
