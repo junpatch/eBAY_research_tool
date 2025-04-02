@@ -48,16 +48,28 @@ class EbayScraper:
         EbayScraperの初期化
         
         Args:
-            config (dict, optional): 設定情報
+            config (ConfigManager, optional): 設定マネージャー
         """
         self.config = config or {}
-        self.base_url = self.config.get(('ebay', 'base_url'), "https://www.ebay.com")
-        self.max_pages = self.config.get(('scraping', 'max_pages'), 2)
-        self.request_delay = self.config.get(('ebay', 'search', 'request_delay'), 3)
-        self.timeout = self.config.get(('scraping', 'timeout'), 60000)  # タイムアウトを60秒に設定
-        self.headless = self.config.get(('scraping', 'headless'), True)
-        self.proxy_enabled = self.config.get(('proxy', 'enabled'), False)
-        self.proxy_url = self.config.get(('proxy', 'url'), None)
+        
+        # 基本設定
+        self.base_url = self.config.get_with_env(
+            ['ebay', 'base_url'],
+            'EBAY_BASE_URL',
+            "https://www.ebay.com",
+            str
+        )
+        
+        # 検索設定
+        self.timeout = self.config.get(['ebay', 'search', 'timeout'], 30, int) * 1000
+        self.request_delay = self.config.get(['ebay', 'search', 'request_delay'], 2, float)
+        self.max_pages = self.config.get(['ebay', 'search', 'max_pages'], 2, int)
+        self.items_per_page = self.config.get(['ebay', 'search', 'items_per_page'], 50, int)
+        
+        # スクレイピング設定
+        self.headless = self.config.get(['scraping', 'headless'], True, bool)
+        self.proxy_enabled = self.config.get(['scraping', 'proxy', 'enabled'], False, bool)
+        self.proxy_url = self.config.get(['scraping', 'proxy', 'url'], None, str)
         
         # ブラウザとコンテキストの初期化
         self.playwright = None
@@ -83,8 +95,8 @@ class EbayScraper:
         }
         
         # ログイン情報
-        self.username = self.config.get_from_env(self.config.get(['ebay', 'login', 'username_env']))
-        self.password = self.config.get_from_env(self.config.get(['ebay', 'login', 'password_env']))
+        self.username = self.config.get_from_env("EBAY_USERNAME", None)
+        self.password = self.config.get_from_env("EBAY_PASSWORD", None)
         
         # requestsモジュールをクラス属性として保持
         self.requests = requests
@@ -495,101 +507,6 @@ class EbayScraper:
         except Exception as e:
             logger.error(f"検索処理中にエラーが発生しました: {str(e)}")
             return []
-    
-    def _handle_search_page(self, page):
-        """
-        検索結果ページの処理を行う
-        
-        Args:
-            page: Playwrightのページオブジェクト
-            
-        Returns:
-            list: 検索結果のリスト
-        """
-        try:
-            # ページの読み込みを待機
-            page.wait_for_load_state('networkidle', timeout=self.timeout)
-            
-            # スクロールを実行してページを完全に読み込む
-            self._scroll_page(page)
-            
-            # 国や言語の選択ダイアログが表示された場合の処理
-            try:
-                if page.query_selector('button:has-text("Ship to")') or page.query_selector('button:has-text("Go to")'):
-                    logger.info("国/地域の選択ダイアログが表示されました")
-                    # 「現在のページにとどまる」または同様のボタンをクリック
-                    if page.query_selector('button:has-text("Stay on")'):
-                        page.click('button:has-text("Stay on")')
-                    elif page.query_selector('button:has-text("Ship to")'):
-                        page.click('button:has-text("Ship to")')
-                    # ダイアログが閉じるのを待機
-                    page.wait_for_load_state('networkidle')
-            except Exception as e:
-                logger.warning(f"国/地域の選択ダイアログの処理中にエラーが発生しました: {e}")
-            
-            # 検索結果が表示されるまで待機
-            page.wait_for_selector('.srp-results', state='visible', timeout=self.timeout)
-            
-            # ページ数の取得（可能な場合）
-            total_pages = 1
-            try:
-                pagination_element = page.query_selector('.pagination__items')
-                if pagination_element:
-                    # ページネーションの最後のアイテムからページ数を取得
-                    page_items = page.query_selector_all('.pagination__item')
-                    if page_items and len(page_items) > 0:
-                        last_page_text = page_items[-1].inner_text()
-                        if last_page_text and last_page_text.isdigit():
-                            total_pages = int(last_page_text)
-            except Exception as e:
-                logger.warning(f"ページ数の取得に失敗しました: {e}")
-            
-            # 最大ページ数を設定値に制限
-            total_pages = min(total_pages, self.max_pages)
-            
-            # 検索結果を格納するリスト
-            all_items = []
-            
-            # 各ページのデータを抽出
-            for page_num in range(1, total_pages + 1):
-                if page_num > 1:
-                    # 次のページに移動
-                    next_page_url = f"{search_url}&_pgn={page_num}"
-                    logger.info(f"次のページに移動: {next_page_url}")
-                    
-                    try:
-                        # 次のページへの移動を待機
-                        with page.expect_navigation(wait_until='networkidle', timeout=self.timeout):
-                            page.goto(next_page_url)
-                        # 検索結果が表示されるまで待機
-                        page.wait_for_selector('.srp-results', state='visible', timeout=self.timeout)
-                        # スクロールを実行してページを完全に読み込む
-                        self._scroll_page(page)
-                    except Exception as e:
-                        logger.error(f"次のページへの移動に失敗しました: {e}")
-                        break
-                
-                try:
-                    # 現在のページのアイテムを抽出
-                    page_items = self._extract_items_data(page)
-                    all_items.extend(page_items)
-                    
-                    logger.info(f"ページ {page_num}/{total_pages} から {len(page_items)} 件のアイテムを抽出しました")
-                except Exception as e:
-                    logger.error(f"ページ {page_num} のデータ抽出中にエラーが発生しました: {e}")
-                    break
-                
-                # 遅延を入れて連続アクセスを避ける
-                if page_num < total_pages:
-                    delay = self.request_delay + random.uniform(0.5, 2.0)
-                    logger.debug(f"{delay:.2f}秒間待機します")
-                    time.sleep(delay)
-            
-            return all_items
-            
-        except Exception as e:
-            logger.error(f"検索結果ページの処理中にエラーが発生しました: {e}")
-            raise
     
     def _extract_items_data(self, page):
         """
