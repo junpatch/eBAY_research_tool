@@ -1,0 +1,199 @@
+# 結合テスト計画
+
+## 全体構成
+tests:
+  - id: "IT-001"
+    name: "キーワードインポートから検索までの統合テスト"
+    description: "キーワードのインポートから検索、結果の保存までの一連の流れをテスト"
+    components:
+      - "core.database_manager"
+      - "services.keyword_manager"
+      - "services.ebay_scraper"
+    setup:
+      - "SQLiteインメモリデータベースを使用"
+      - "テスト用のキーワードファイル準備"
+    verification:
+      - "キーワードがデータベースに正しく保存されていること"
+      - "検索結果がキーワードに紐付けられて保存されていること"
+      - "検索履歴が正しく記録されていること"
+
+  - id: "IT-002"
+    name: "データエクスポート統合テスト"
+    description: "検索結果のエクスポート機能をテスト"
+    components:
+      - "core.database_manager"
+      - "services.data_exporter"
+    setup:
+      - "SQLiteインメモリデータベースを使用"
+      - "テスト用の検索結果データ作成"
+    verification:
+      - "CSVエクスポートが正しいフォーマットで作成されること"
+      - "Excelエクスポートが正しいフォーマットで作成されること"
+      - "エクスポート履歴が正しく記録されること"
+
+  - id: "IT-003"
+    name: "CLIインターフェース統合テスト"
+    description: "コマンドラインインターフェースと内部コンポーネントの連携をテスト"
+    components:
+      - "interfaces.cli_interface"
+      - "core.database_manager"
+      - "services.keyword_manager"
+      - "services.ebay_scraper"
+      - "services.data_exporter"
+    setup:
+      - "SQLiteインメモリデータベースを使用"
+      - "テスト用の入力データ準備"
+    verification:
+      - "importコマンドで正しくキーワードがインポートされること"
+      - "searchコマンドで正しく検索が実行されること"
+      - "statsコマンドで正しい統計情報が表示されること"
+      - "list-keywordsコマンドで正しくキーワード一覧が表示されること"
+
+  - id: "IT-004"
+    name: "設定変更時の動作テスト"
+    description: "設定変更が各コンポーネントに正しく反映されることをテスト"
+    components:
+      - "core.config_manager"
+      - "core.database_manager"
+      - "services.ebay_scraper"
+      - "services.data_exporter"
+    setup:
+      - "SQLiteインメモリデータベースを使用"
+      - "テスト用の設定ファイル準備"
+    verification:
+      - "データベース接続設定が変更されたとき正しく反映されること"
+      - "eBayスクレイパーの設定が変更されたとき正しく反映されること"
+      - "エクスポート設定が変更されたとき正しく反映されること"
+
+  - id: "IT-005"
+    name: "エラー処理統合テスト"
+    description: "各種エラー時の挙動をテスト"
+    components:
+      - "core.database_manager"
+      - "services.keyword_manager"
+      - "services.ebay_scraper"
+      - "core.logger_manager"
+    setup:
+      - "SQLiteインメモリデータベースを使用"
+      - "エラー発生シナリオの準備"
+    verification:
+      - "データベース接続エラー時に適切なエラーハンドリングが行われること"
+      - "スクレイピングエラー時に適切なエラーハンドリングが行われること"
+      - "エラーがログに正しく記録されること"
+      - "エラー時でもアプリケーションがクラッシュせず処理を継続できること"
+
+## テスト実装詳細
+implementations:
+  - id: "IT-001"
+    file: "tests/integration/test_keyword_search_flow.py"
+    external_dependencies:
+      - type: "ebay_api"
+        strategy: "fixture_response"
+        description: "事前に記録したeBay検索結果データを使用（実際のWebアクセスなし）"
+    test_cases:
+      - "単一キーワードのインポートと検索"
+      - "複数キーワードのバッチインポートと検索"
+      - "カテゴリ付きキーワードのインポートと検索"
+    ci_considerations:
+      - "ファイルパスを相対パスで指定（CI環境の違いに対応）"
+      - "テスト用データをリポジトリに含める"
+
+  - id: "IT-002"
+    file: "tests/integration/test_data_export_flow.py"
+    test_cases:
+      - "CSV形式でのエクスポート"
+      - "Excel形式でのエクスポート"
+      - "カスタムフィルターを使ったエクスポート"
+      - "エクスポート履歴の検証"
+    ci_considerations:
+      - "出力ファイルを一時ディレクトリに生成（権限問題回避）"
+      - "テスト後の清掃処理を確実に実行"
+
+  - id: "IT-003"
+    file: "tests/integration/test_cli_interface_integration.py"
+    external_dependencies:
+      - type: "ebay_api"
+        strategy: "fixture_response"
+        description: "事前に記録したeBay検索結果データを使用（実際のWebアクセスなし）"
+    test_cases:
+      - "importコマンドのテスト"
+      - "searchコマンドのテスト"
+      - "statsコマンドのテスト"
+      - "list-keywordsコマンドのテスト"
+      - "clean-allコマンドのテスト"
+    ci_considerations:
+      - "標準入出力のリダイレクションを使用"
+      - "環境変数の一時的な設定と復元"
+
+  - id: "IT-004"
+    file: "tests/integration/test_config_change_flow.py"
+    test_cases:
+      - "データベース設定変更のテスト"
+      - "スクレイパー設定変更のテスト"
+      - "エクスポート設定変更のテスト"
+    ci_considerations:
+      - "設定ファイルをテスト内で動的に生成"
+      - "環境変数による上書き機能のテスト"
+
+  - id: "IT-005"
+    file: "tests/integration/test_error_handling_flow.py"
+    external_dependencies:
+      - type: "ebay_api"
+        strategy: "error_simulation"
+        description: "eBay APIからのエラー応答をシミュレート"
+    test_cases:
+      - "データベース接続エラーのテスト"
+      - "スクレイピングエラーのテスト"
+      - "ログ出力の検証"
+      - "エラー回復処理のテスト"
+    ci_considerations:
+      - "ログファイルを一時ディレクトリに出力"
+      - "タイムアウトとリトライの設定を短縮"
+
+## テスト環境
+environment:
+  setup:
+    - "SQLiteインメモリデータベースを使用"
+    - "テスト用の設定ファイルを動的に生成"
+    - "テスト用のダミーデータを準備（tests/fixtures/）"
+    - "eBay APIの応答データをフィクスチャとして準備（tests/fixtures/ebay_responses/）"
+  teardown:
+    - "テスト用に作成した一時ファイルを削除"
+  ci_specific:
+    - "テスト実行時間の上限設定（タイムアウト）"
+    - "バージョン固定のDockerコンテナでテスト実行"
+    - "依存関係をrequirements-dev.txtに分離"
+    - "GitHub Actions用のワークフロー定義ファイル追加"
+
+## コード品質目標
+quality_goals:
+  - "結合テストのカバレッジ80%以上"
+  - "全統合テストのパスを確認"
+  - "エッジケースの網羅"
+  - "エラー処理の検証"
+  - "テスト実行時間の最適化（CI環境で5分以内完了）"
+
+## CIパイプライン連携
+ci_pipeline:
+  - stage: "setup"
+    steps:
+      - "Pythonバージョン指定（3.8以上）"
+      - "依存関係インストール（requirements-dev.txt）"
+      - "テスト環境変数設定"
+
+  - stage: "test"
+    steps:
+      - "単体テスト実行"
+      - "結合テスト実行"
+      - "カバレッジレポート生成"
+
+  - stage: "analyze"
+    steps:
+      - "テスト結果の収集・表示"
+      - "カバレッジレポートのアップロード"
+      - "失敗したテストのログ確認"
+
+  - stage: "cleanup"
+    steps:
+      - "テスト環境のクリーンアップ"
+      - "一時ファイルの削除"

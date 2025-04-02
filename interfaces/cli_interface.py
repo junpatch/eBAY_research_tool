@@ -217,54 +217,49 @@ def show_statistics():
     """データベースの統計情報を表示します"""
     from core.config_manager import ConfigManager
     from core.database_manager import DatabaseManager
-    from sqlalchemy import func
-    from models.data_models import Keyword, EbaySearchResult, SearchHistory
     
     # 初期化
     config = ConfigManager()
     db = DatabaseManager(config.get_db_url())
     
-    with db.session_scope() as session:
-        # キーワード統計
-        keyword_count = session.query(func.count(Keyword.id)).scalar()
-        active_keywords = session.query(func.count(Keyword.id)).filter(Keyword.status == 'active').scalar()
-        completed_keywords = session.query(func.count(Keyword.id)).filter(Keyword.status == 'completed').scalar()
-        
-        # 検索結果統計
-        result_count = session.query(func.count(EbaySearchResult.id)).scalar()
-        avg_price = session.query(func.avg(EbaySearchResult.price)).scalar()
-        min_price = session.query(func.min(EbaySearchResult.price)).scalar()
-        max_price = session.query(func.max(EbaySearchResult.price)).scalar()
-        
-        # ジョブ履歴
-        job_count = session.query(func.count(SearchHistory.id)).scalar()
-        completed_jobs = session.query(func.count(SearchHistory.id)).filter(SearchHistory.status == 'completed').scalar()
-        failed_jobs = session.query(func.count(SearchHistory.id)).filter(SearchHistory.status == 'failed').scalar()
-        
-        # 表の作成と表示
-        table = Table(title="eBay Research Tool - データベース統計")
-        
-        table.add_column("カテゴリ", style="cyan")
-        table.add_column("項目", style="magenta")
-        table.add_column("値", justify="right", style="green")
-        
-        # キーワード情報
-        table.add_row("キーワード", "総数", str(keyword_count))
-        table.add_row("キーワード", "アクティブ", str(active_keywords))
-        table.add_row("キーワード", "完了", str(completed_keywords))
-        
-        # 検索結果情報
-        table.add_row("検索結果", "総数", str(result_count))
-        table.add_row("検索結果", "平均価格", f"${avg_price:.2f}" if avg_price else "N/A")
-        table.add_row("検索結果", "最低価格", f"${min_price:.2f}" if min_price else "N/A")
-        table.add_row("検索結果", "最高価格", f"${max_price:.2f}" if max_price else "N/A")
-        
-        # ジョブ情報
-        table.add_row("ジョブ", "総数", str(job_count))
-        table.add_row("ジョブ", "完了", str(completed_jobs))
-        table.add_row("ジョブ", "失敗", str(failed_jobs))
-        
-        console.print(table)
+    # 統計情報を取得
+    stats = db.get_search_stats()
+    
+    # 表の作成と表示
+    table = Table(title="eBay Research Tool - データベース統計")
+    
+    table.add_column("カテゴリ", style="cyan")
+    table.add_column("項目", style="magenta")
+    table.add_column("値", justify="right", style="green")
+    
+    # キーワード情報
+    table.add_row("キーワード", "総数", str(stats['total_keywords']))
+    table.add_row("キーワード", "検索済み", str(stats['searched_keywords']))
+    
+    # 検索結果情報
+    table.add_row("検索結果", "総数", str(stats['total_results']))
+    table.add_row("検索結果", "平均/キーワード", str(stats['avg_results_per_keyword']))
+    
+    # 価格情報
+    if stats['price_stats']['min'] is not None:
+        table.add_row("価格", "最低価格", f"${stats['price_stats']['min']:.2f}")
+    if stats['price_stats']['max'] is not None:
+        table.add_row("価格", "最高価格", f"${stats['price_stats']['max']:.2f}")
+    if stats['price_stats']['avg'] is not None:
+        table.add_row("価格", "平均価格", f"${stats['price_stats']['avg']:.2f}")
+    
+    # 最終検索日時
+    if stats['last_search']:
+        table.add_row("検索", "最終検索日時", stats['last_search'])
+    
+    # トップセラー情報
+    if stats['top_sellers']:
+        for i, seller in enumerate(stats['top_sellers'], 1):
+            if i <= 3:  # 上位3名のみ表示
+                table.add_row("トップセラー", f"#{i}", f"{seller['seller_name']} ({seller['count']}件)")
+    
+    console.print(table)
+    console.print("[bold blue]統計情報の表示が完了しました[/]")
 
 @app.command("list-keywords")
 def list_keywords(
@@ -274,45 +269,40 @@ def list_keywords(
     """保存されているキーワードの一覧を表示します"""
     from core.config_manager import ConfigManager
     from core.database_manager import DatabaseManager
-    from models.data_models import Keyword
     
     # 初期化
     config = ConfigManager()
     db = DatabaseManager(config.get_db_url())
     
-    with db.session_scope() as session:
-        # クエリ構築
-        query = session.query(Keyword)
+    # キーワードを取得
+    if status.lower() == "all":
+        keywords = db.get_keywords(status=None, limit=limit)
+    else:
+        keywords = db.get_keywords(status=status, limit=limit)
+    
+    if not keywords:
+        console.print(f"[bold yellow]該当するキーワードがありません。(ステータス: {status})[/]")
+        return
         
-        if status.lower() != "all":
-            query = query.filter(Keyword.status == status)
-            
-        query = query.order_by(Keyword.id).limit(limit)
-        keywords = query.all()
+    # 表の作成と表示
+    table = Table(title=f"キーワード一覧 (ステータス: {status})")
+    table.add_column("ID", justify="right", style="cyan")
+    table.add_column("キーワード", style="green")
+    table.add_column("カテゴリ", style="magenta")
+    table.add_column("ステータス", style="blue")
+    table.add_column("最終検索日時", style="yellow")
+    
+    for keyword in keywords:
+        last_searched = keyword.last_searched_at.strftime("%Y-%m-%d %H:%M") if keyword.last_searched_at else "未検索"
+        table.add_row(
+            str(keyword.id),
+            keyword.keyword,
+            keyword.category or "-",
+            keyword.status,
+            last_searched
+        )
         
-        if not keywords:
-            console.print(f"[bold yellow]該当するキーワードがありません。(ステータス: {status})[/]")
-            return
-            
-        # 表の作成と表示
-        table = Table(title=f"キーワード一覧 (ステータス: {status})")
-        table.add_column("ID", justify="right", style="cyan")
-        table.add_column("キーワード", style="green")
-        table.add_column("カテゴリ", style="magenta")
-        table.add_column("ステータス", style="blue")
-        table.add_column("最終検索日時", style="yellow")
-        
-        for keyword in keywords:
-            last_searched = keyword.last_searched_at.strftime("%Y-%m-%d %H:%M") if keyword.last_searched_at else "未検索"
-            table.add_row(
-                str(keyword.id),
-                keyword.keyword,
-                keyword.category or "-",
-                keyword.status,
-                last_searched
-            )
-            
-        console.print(table)
+    console.print(table)
 
 @app.command("clean-all")
 def clean_database(
@@ -321,7 +311,6 @@ def clean_database(
     """データベースをクリーンアップします（すべてのデータを削除）"""
     from core.config_manager import ConfigManager
     from core.database_manager import DatabaseManager
-    from models.data_models import Base
     
     if not confirm:
         sure = typer.confirm("すべてのデータが削除されます。本当に続行しますか？")
@@ -333,12 +322,15 @@ def clean_database(
     config = ConfigManager()
     db = DatabaseManager(config.get_db_url())
     
-    with console.status("[bold red]データベースを初期化中...[/]") as status:
-        # テーブルをすべて削除して再作成
-        Base.metadata.drop_all(db.engine)
-        Base.metadata.create_all(db.engine)
+    with console.status("[bold red]データベースをクリーンアップ中...[/]") as status:
+        # データをクリーンアップ
+        result = db.clean_database()
         
-        console.print("[bold green]データベースを初期化しました。[/]")
+        console.print("[bold green]データベースをクリーンアップしました。[/]")
+        console.print(f"  • キーワード: {result['keywords']}件")
+        console.print(f"  • 検索結果: {result['search_results']}件")
+        console.print(f"  • 検索履歴: {result['search_history']}件")
+        console.print(f"  • エクスポート履歴: {result['export_history']}件")
 
 def main():
     app()
