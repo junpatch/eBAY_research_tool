@@ -378,42 +378,18 @@ def test_list_keywords_no_data(mock_config, mock_db):
 # clean-allコマンドのテスト
 def test_clean_database_confirmed(mock_config, mock_db):
     """データベースクリーンアップテスト（確認あり）"""
-    # clean_databaseメソッドのモック
-    mock_db.clean_database.return_value = {
-        'keywords': 5,
-        'search_results': 75,
-        'search_history': 3,
-        'export_history': 2
-    }
-    
     # コマンド実行（確認に「y」と応答）
     result = runner.invoke(app, ["clean-all"], input="y\n")
     
     # 結果確認
     assert result.exit_code == 0
     assert "データベースを初期化しました" in result.stdout
-    assert "5件" in result.stdout  # keywords
-    assert "75件" in result.stdout  # search_results
-    assert "3件" in result.stdout  # search_history
-    assert "2件" in result.stdout  # export_history
 
 def test_clean_database_no_confirm(mock_config, mock_db):
-    """データベースクリーンアップテスト（確認なし）"""
-    # clean_databaseメソッドのモック
-    mock_db.clean_database.return_value = {
-        'keywords': 5,
-        'search_results': 75,
-        'search_history': 3,
-        'export_history': 2
-    }
-    
+    """データベースクリーンアップテスト（確認なし）"""    
     # コマンド実行（--confirm オプション付き）
     result = runner.invoke(app, ["clean-all", "--confirm"])
     
     # 結果確認
     assert result.exit_code == 0
     assert "データベースを初期化しました" in result.stdout
-    assert "5件" in result.stdout  # keywords
-    assert "75件" in result.stdout  # search_results
-    assert "3件" in result.stdout  # search_history
-    assert "2件" in result.stdout  # export_history 

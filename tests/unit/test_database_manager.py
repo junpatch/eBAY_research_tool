@@ -207,7 +207,8 @@ def test_save_search_results(db_manager):
     ]
     
     # 保存
-    saved_count = db_manager.save_search_results(keyword_id, results)
+    job_id = 1 # ダミーのジョブID
+    saved_count = db_manager.save_search_results(keyword_id, job_id, results)
     assert saved_count == 2
     
     # 保存された結果を確認
@@ -244,7 +245,8 @@ def test_save_search_results_duplicate_items(db_manager):
             'price': 10.99
         }
     ]
-    db_manager.save_search_results(keyword_id, results1)
+    job_id = 1 # ダミーのジョブID
+    db_manager.save_search_results(keyword_id, job_id, results1)
     
     # 同じitem_idを含む検索結果を保存
     results2 = [
@@ -261,7 +263,8 @@ def test_save_search_results_duplicate_items(db_manager):
     ]
     
     # 新しいアイテムだけが保存されるはず
-    saved_count = db_manager.save_search_results(keyword_id, results2)
+    job_id = 1 # ダミーのジョブID
+    saved_count = db_manager.save_search_results(keyword_id, job_id, results2)
     assert saved_count == 1
     
     # 保存された結果を確認
@@ -282,7 +285,8 @@ def test_save_search_results_empty_list(db_manager):
     keyword_id = db_manager.add_keyword("search keyword", "category")
     
     # 空リスト保存
-    saved_count = db_manager.save_search_results(keyword_id, [])
+    job_id = 1 # ダミーのジョブID
+    saved_count = db_manager.save_search_results(keyword_id, job_id, [])
     assert saved_count == 0
 
 def test_start_search_job(db_manager):

@@ -141,7 +141,8 @@ class TestDataExportFlow:
         
         # 各キーワードに対して検索結果を保存
         for i, keyword_id in enumerate(keyword_ids):
-            results_count = self.db_manager.save_search_results(keyword_id, mock_results)
+            job_id = 1 # ダミーのジョブID
+            results_count = self.db_manager.save_search_results(keyword_id, job_id, mock_results)
             print(f"キーワードID {keyword_id} に対して {results_count} 件の結果を保存しました")
         
         # 結果が保存されたことを確認
@@ -476,4 +477,78 @@ class TestDataExportFlow:
             for i, history in enumerate(recent_histories):
                 print(f"履歴 {i+1}: 形式={history.export_type}, ステータス={history.status}")
                 assert history.export_type == formats[i], f"{i+1}回目のエクスポート形式が正しくありません"
-                assert history.status == "success", f"{i+1}回目のエクスポートステータスが正しくありません" 
+                assert history.status == "success", f"{i+1}回目のエクスポートステータスが正しくありません"
+
+    def test_csv_export_with_job_id(self):
+        """job_idを指定してCSV形式でエクスポートするテスト"""
+        # テスト用データベースのデータを確認
+        with self.db_manager.session_scope() as session:
+            results_count = session.query(EbaySearchResult).count()
+            keywords_count = session.query(Keyword).count()
+            print(f"テスト前のデータ状態: 検索結果 {results_count}件, キーワード {keywords_count}件")
+
+            # データがない場合は再設定
+            if results_count == 0:
+                self._setup_test_data()
+                results_count = session.query(EbaySearchResult).count()
+                keywords_count = session.query(Keyword).count()
+                print(f"テストデータ再設定後: 検索結果 {results_count}件, キーワード {keywords_count}件")
+
+        # CSV出力ファイルのパス
+        output_file = self.output_dir / "test_export_job_id.csv"
+        target_job_id = 1  # _setup_test_dataで使用しているジョブID
+
+        # エクスポートを実行 (job_idを指定)
+        result = self.exporter.export_results(
+            output_format="csv",
+            output_path=str(output_file),
+            job_id=target_job_id
+            # resultsパラメータは渡さない（DBからjob_idで取得させる）
+        )
+
+        # 結果の検証
+        assert result is not None, "エクスポート結果がNoneです"
+        assert output_file.exists(), "出力ファイルが存在しません"
+        assert result["path"] == str(output_file), "結果のパスが正しくありません"
+        assert result["is_empty"] is False, "エクスポート結果が空としてマークされています"
+
+        # DBから期待されるレコード数を取得
+        with self.db_manager.session_scope() as session:
+            expected_count = session.query(EbaySearchResult)\
+                                    .filter(EbaySearchResult.search_job_id == target_job_id)\
+                                    .count()
+        print(f"期待されるレコード数 (search_job_id={target_job_id}): {expected_count}")
+        assert result["count"] == expected_count, "エクスポートされたレコード数が期待値と異なります"
+
+        # CSVファイルの内容を検証
+        with open(output_file, 'r', encoding='utf-8') as f:
+            csv_reader = csv.reader(f)
+            header = next(csv_reader)
+            rows = list(csv_reader)
+
+            # ヘッダーに必要なフィールドが含まれていることを確認
+            print(f"CSVヘッダー: {header}")
+            # 統合テストではjob_idで取得した場合でもキーワード情報は含まれる想定
+            assert "keyword" in header, "キーワード列が含まれていません"
+            assert "category" in header, "カテゴリ列が含まれていません"
+            assert "search_job_id" in header, "search_job_id列が含まれていません" # job_idも含まれることを確認
+
+            # 正しい数のレコードがエクスポートされたことを確認
+            print(f"CSVレコード数: {len(rows)}")
+            assert len(rows) == expected_count, "CSVファイルのレコード数が期待値と異なります"
+
+            # job_idが正しいことを確認 (最初の数行で確認)
+            if "search_job_id" in header and rows:
+                 job_id_column_index = header.index("search_job_id")
+                 for i, row in enumerate(rows[:min(len(rows), 5)]): # 最初の5行をチェック
+                     assert int(row[job_id_column_index]) == target_job_id, f"{i+1}行目のsearch_job_idが正しくありません"
+
+        # エクスポート履歴が記録されたことを確認
+        with self.db_manager.session_scope() as session:
+            # job_idを指定したエクスポートの履歴を取得 (最新のものを想定)
+            history = session.query(ExportHistory).order_by(ExportHistory.id.desc()).first()
+            assert history is not None, "エクスポート履歴が記録されていません"
+            assert history.export_type == "csv", "エクスポート形式が正しくありません"
+            assert history.status == "success", "エクスポートステータスが正しくありません"
+            # job_idが履歴に記録されているか（オプションだが、あると良い）
+            # assert history.job_id == target_job_id 

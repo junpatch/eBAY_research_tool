@@ -105,7 +105,8 @@ class TestKeywordSearchFlow:
                 assert results[0]['item_id'] == "123456789012"
                 
                 # 検索結果をDBに保存
-                saved_count = self.db_manager.save_search_results(keyword_id, results)
+                job_id = 1 # ダミーのジョブID
+                saved_count = self.db_manager.save_search_results(keyword_id, job_id, results)
                 assert saved_count == 3
         
         # 検索結果が正しく保存されたか確認
@@ -153,7 +154,8 @@ class TestKeywordSearchFlow:
             with EbayScraper(self.config) as scraper:
                 for i, keyword in enumerate(keywords):
                     results = scraper.search_keyword(keyword.keyword)
-                    saved_count = self.db_manager.save_search_results(keyword.id, results)
+                    job_id = 1 # ダミーのジョブID
+                    saved_count = self.db_manager.save_search_results(keyword.id, job_id, results)
                     assert saved_count == 3
                     
                     # 検索履歴を更新
@@ -224,7 +226,8 @@ class TestKeywordSearchFlow:
                 keywords = self.db_manager.get_keywords()
                 for keyword in keywords:
                     results = scraper.search_keyword(keyword.keyword)
-                    saved_count = self.db_manager.save_search_results(keyword.id, results)
+                    job_id = 1 # ダミーのジョブID
+                    saved_count = self.db_manager.save_search_results(keyword.id, job_id, results)
                     assert saved_count == 3
         
         # カテゴリごとの検索結果を確認

@@ -167,7 +167,7 @@ class DatabaseManager:
             return result
     
     # 検索結果の保存
-    def save_search_results(self, keyword_id, results):
+    def save_search_results(self, keyword_id, search_job_id, results):
         """
         検索結果を保存する
         
@@ -198,6 +198,7 @@ class DatabaseManager:
                 ).first():
                     search_result = EbaySearchResult(
                         keyword_id=keyword_id,
+                        search_job_id=search_job_id,
                         item_id=item_id,
                         title=result.get('title', ''),
                         price=result.get('price'),
@@ -353,30 +354,17 @@ class DatabaseManager:
     
     def clean_database(self):
         """
-        データベースをクリーンアップする
-        
-        Returns:
-            dict: クリーンアップした各テーブルのレコード数
+        データベースをクリーンアップする（全テーブルを削除し、再作成する）
         """
-        with self.session_scope() as session:
-            # 削除前のレコード数をカウント
-            keyword_count = session.query(func.count(Keyword.id)).scalar() or 0
-            search_results_count = session.query(func.count(EbaySearchResult.id)).scalar() or 0
-            search_history_count = session.query(func.count(SearchHistory.id)).scalar() or 0
-            export_history_count = session.query(func.count(ExportHistory.id)).scalar() or 0
-            
-            # 全テーブルをクリア
-            session.query(EbaySearchResult).delete()
-            session.query(SearchHistory).delete()
-            session.query(ExportHistory).delete()
-            session.query(Keyword).delete()
-            
-            # 削除結果を返す
-            result = {
-                'keywords': keyword_count,
-                'search_results': search_results_count,
-                'search_history': search_history_count,
-                'export_history': export_history_count
-            }
-            
-            return result
+        try:
+            # セッションを閉じてからテーブル操作を行う
+            self.Session.remove()
+            # 全テーブルを削除
+            Base.metadata.drop_all(self.engine)
+            logger.info("全てのテーブルを削除しました。")
+            # 全テーブルを再作成
+            self.create_tables()
+            logger.info("データベースのクリーンアップが完了しました。")
+        except Exception as e:
+            logger.error(f"データベースのクリーンアップ中にエラーが発生しました: {e}")
+            raise # エラーを再発生させる

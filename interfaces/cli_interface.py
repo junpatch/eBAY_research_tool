@@ -159,7 +159,7 @@ def search_keywords(
                     
                     # 結果をDBに保存
                     if results:
-                        saved_count = db.save_search_results(keyword.id, results)
+                        saved_count = db.save_search_results(keyword.id, job_id, results)
                         total_results += saved_count
                         
                         # 検索履歴を更新
@@ -330,13 +330,9 @@ def clean_database(
     
     with console.status("[bold red]データベースをクリーンアップ中...[/]") as status:
         # データをクリーンアップ
-        result = db.clean_database()
+        db.clean_database()
         
         console.print("[bold green]データベースを初期化しました[/]")
-        console.print(f"  • キーワード: {str(result.get('keywords', 0))}件")
-        console.print(f"  • 検索結果: {str(result.get('search_results', 0))}件")
-        console.print(f"  • 検索履歴: {str(result.get('search_history', 0))}件")
-        console.print(f"  • エクスポート履歴: {str(result.get('export_history', 0))}件")
 
 def main():
     app()

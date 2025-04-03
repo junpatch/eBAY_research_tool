@@ -30,6 +30,7 @@ class EbaySearchResult(Base):
 
     id = Column(Integer, primary_key=True)
     keyword_id = Column(Integer, ForeignKey('keywords.id'))
+    search_job_id = Column(Integer, ForeignKey('search_history.id'))
     item_id = Column(String, nullable=False)
     title = Column(String)
     price = Column(Float)
@@ -50,6 +51,7 @@ class EbaySearchResult(Base):
 
     # リレーションシップ
     keyword = relationship("Keyword", back_populates="search_results")
+    search_history = relationship("SearchHistory", back_populates="search_results")
 
     def __repr__(self):
         return f"<EbaySearchResult(id={self.id}, item_id='{self.item_id}', price={self.price})>"
@@ -69,6 +71,9 @@ class SearchHistory(Base):
     status = Column(String, default='in_progress')  # in_progress, completed, failed
     error_log = Column(Text)
     execution_time_seconds = Column(Float)
+
+    # リレーションシップ
+    search_results = relationship("EbaySearchResult", back_populates="search_history")
 
     def __repr__(self):
         return f"<SearchHistory(id={self.id}, status='{self.status}', total={self.total_keywords}, processed={self.processed_keywords})>"

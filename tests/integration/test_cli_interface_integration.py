@@ -198,13 +198,6 @@ class TestCliInterfaceIntegration:
     @patch('core.database_manager.DatabaseManager.clean_database')
     def test_clean_all_command(self, mock_clean_database):
         """clean-allコマンドのテスト"""
-        # モックの設定
-        mock_clean_database.return_value = {
-            'keywords': 5,
-            'search_results': 75,
-            'search_history': 3,
-            'export_history': 2
-        }
         
         # yes入力を自動化してclean-allコマンドを実行
         with temp_env_vars(self.env_vars):
@@ -213,7 +206,6 @@ class TestCliInterfaceIntegration:
         # 結果の検証
         assert result.exit_code == 0
         assert "データベースを初期化しました" in result.stdout
-        assert "キーワード: 5件" in result.stdout
         
         # モックが正しく呼び出されたことを確認
         mock_clean_database.assert_called_once() 
