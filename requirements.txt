@@ -1,5 +1,5 @@
 # eBay Research Tool Dependencies
-# Python >= 3.8, < 3.12
+# Python >= 3.9, < 3.12
 
 # Web Automation
 playwright==1.40.0

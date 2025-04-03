@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from interfaces.sheets_interface import GoogleSheetsInterface
 
 @pytest.fixture
-def mock_config():
+def mock_config(tmp_path):
     """設定マネージャーのモック"""
     mock_config = MagicMock()
     # 必要な設定値を設定
@@ -25,7 +25,8 @@ def mock_config():
             return default
     
     mock_config.get.side_effect = config_get_side_effect
-    mock_config.get_path.return_value = Path('/mock/path/google_token')
+    token_dir_path = tmp_path / "google_token"
+    mock_config.get_path.return_value = token_dir_path
     return mock_config
 
 @pytest.fixture
