@@ -56,26 +56,39 @@ def test_init(logger_manager, temp_log_dir):
     assert any(isinstance(h, logging.handlers.RotatingFileHandler) for h in handlers)
     assert any(isinstance(h, logging.StreamHandler) and not isinstance(h, logging.handlers.RotatingFileHandler) for h in handlers)
 
-# def test_default_log_dir():
-#     """デフォルトのログディレクトリが正しく設定されるかテスト"""
-#     # ハンドラ設定メソッドと mkdir をモック
-#     with patch('core.logger_manager.LoggerManager._setup_file_handler') as mock_setup_file, \
-#          patch('core.logger_manager.LoggerManager._setup_console_handler') as mock_setup_console, \
-#          patch('pathlib.Path.mkdir') as mock_mkdir:
-#         
-#         # log_dir を指定せずに初期化
-#         logger_manager = LoggerManager()
-#         
-#         # デフォルトのログディレクトリはcore/logger_manager.pyの親ディレクトリ/logsになるはず
-#         expected_log_dir = Path(__file__).parent.parent.parent / 'logs'
-#         assert logger_manager.log_dir == expected_log_dir
-#         
-#         # ディレクトリが作成されたこと（mkdirが呼ばれたこと）を確認
-#         mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
-#         
-#         # ハンドラ設定が呼ばれていないことを確認（モックしたため）
-#         mock_setup_file.assert_not_called()
-#         mock_setup_console.assert_not_called()
+def test_default_log_dir():
+    """デフォルトのログディレクトリが正しく設定されるかテスト"""
+    # テスト実行前にルートロガーのハンドラをクリア
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        handler.close()
+        root_logger.removeHandler(handler)
+
+    # ハンドラ設定メソッドと mkdir をモック
+    with patch('core.logger_manager.LoggerManager._setup_file_handler') as mock_setup_file, \
+         patch('core.logger_manager.LoggerManager._setup_console_handler') as mock_setup_console, \
+         patch('pathlib.Path.mkdir') as mock_mkdir:
+        
+        # log_dir を指定せずに初期化
+        # グローバルインスタンスの影響を避けるため、ここで直接インスタンス化
+        logger_manager = LoggerManager()
+        
+        # デフォルトのログディレクトリはcore/logger_manager.pyの親の親/logsになるはず
+        expected_log_dir = Path(__file__).parent.parent / 'logs'
+        assert logger_manager.log_dir == expected_log_dir
+        
+        # ディレクトリが作成されたこと（mkdirが呼ばれたこと）を確認
+        mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
+        
+        # ハンドラ設定が呼ばれたことを確認
+        mock_setup_file.assert_called_once()
+        mock_setup_console.assert_called_once()
+
+    # テスト実行後にルートロガーのハンドラをクリア
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        handler.close()
+        root_logger.removeHandler(handler)
 
 def test_file_handler_setup(logger_manager, temp_log_dir):
     """ファイルハンドラの設定テスト"""

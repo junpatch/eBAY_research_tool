@@ -46,14 +46,15 @@ logs/
 Thumbs.db
 
 # Secrets
-config.yaml # Ignore production config
+config.yaml
 secrets.json
-credentials.json # Ignore production credentials
+credentials.json
 .env
 
-# Keep test config files
-!config/config.test.yaml
-!config/credentials.test.json
+# Ignore config directory, but keep test files
+config/
+!config/*.test.yaml
+!config/*.test.json
 
 input.csv
 windsurf.json
