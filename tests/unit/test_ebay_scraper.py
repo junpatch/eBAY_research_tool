@@ -227,7 +227,7 @@ def test_search_keyword(mock_random_ua, mock_extract_items, mock_start_browser, 
     # wait_for_selectorが呼ばれていない問題を修正
     # eBayScraperではwait_for_selectorが使われていないため、この検証は削除
     # 代わりにwait_for_load_stateが呼び出されていることを確認
-    mock_page.wait_for_load_state.assert_called_with("networkidle")
+    mock_page.wait_for_load_state.assert_called_with("load")
 
 @patch.object(EbayScraper, 'start_browser')
 @patch.object(EbayScraper, '_extract_items_data')
@@ -382,46 +382,102 @@ def test_get_request_headers(mock_random_ua, ebay_scraper):
     assert 'Accept-Language' in headers
     mock_random_ua.assert_called_once()
 
-def test_extract_items_data(ebay_scraper):
+@pytest.mark.parametrize("main_container_found", [True, False]) # メインコンテナが見つかる場合と見つからない場合をテスト
+def test_extract_items_data(ebay_scraper, main_container_found):
     """商品データ抽出のテスト"""
     # モックページの作成
     mock_page = MagicMock()
-    
-    # 商品リスト要素のモック
-    mock_item = MagicMock()
-    mock_item_link = MagicMock()
+
+    # 商品リスト要素のモック (共通)
+    mock_item = MagicMock(name="mock_item")
+    mock_item_link = MagicMock(name="mock_item_link")
     mock_item_link.get_attribute.return_value = "https://www.ebay.com/itm/123456789"
-    mock_item.query_selector.side_effect = lambda selector: {
+    mock_title_elem = MagicMock(name="mock_title_elem")
+    mock_title_elem.inner_text.return_value = "  Test Item  " # 前後の空白を含むテスト
+    mock_price_elem = MagicMock(name="mock_price_elem")
+    mock_price_elem.inner_text.return_value = "  $10.99  "
+    mock_shipping_elem = MagicMock(name="mock_shipping_elem")
+    mock_shipping_elem.inner_text.return_value = "  Free shipping  "
+    mock_seller_elem = MagicMock(name="mock_seller_elem")
+    mock_seller_elem.inner_text.return_value = " seller123 (1,234) 99.8% "
+    mock_condition_elem = MagicMock(name="mock_condition_elem")
+    mock_condition_elem.inner_text.return_value = " New "
+    mock_buy_it_now_elem = MagicMock(name="mock_buy_it_now_elem") # 固定価格用
+    mock_img_elem = MagicMock(name="mock_img_elem")
+    mock_img_elem.get_attribute.return_value = "https://example.com/img.jpg"
+
+    # item.query_selector のモック (Lambdaではなく辞書で定義)
+    item_selectors = {
         '.s-item__link': mock_item_link,
-        '.s-item__info-col .s-item__title--tagblock': None,  # 広告ではない
-        '.s-item__title': MagicMock(inner_text=lambda: "Test Item"),
-        '.s-item__price': MagicMock(inner_text=lambda: "$10.99"),
-        '.s-item__shipping': MagicMock(inner_text=lambda: "Free shipping"),
-        '.s-item__seller-info-text': MagicMock(inner_text=lambda: "seller123 (1,234) 99.8%"),
+        '.s-item__title': mock_title_elem,
+        '.s-item__price': mock_price_elem,
+        '.s-item__shipping': mock_shipping_elem,
+        '.s-item__seller-info-text': mock_seller_elem,
         '.s-item__bids': None,  # 入札なし
-        '.s-item__subtitle': MagicMock(inner_text=lambda: "New"),
-        '.s-item__dynamic.s-item__buyItNowOption': MagicMock(),
+        '.s-item__subtitle': mock_condition_elem,
+        '.s-item__dynamic.s-item__buyItNowOption': mock_buy_it_now_elem, # 固定価格
         '.s-item__time-left': None,  # オークションではない
-        '.s-item__image-wrapper >img': MagicMock(get_attribute=lambda attr: "https://example.com/img.jpg" if attr == 'src' else None)
-    }.get(selector, None)
-    
-    # query_selector_allのモック
-    mock_page.query_selector_all.return_value = [mock_item]
-    
+        '.s-item__image-wrapper >img': mock_img_elem
+    }
+    mock_item.query_selector.side_effect = lambda selector: item_selectors.get(selector)
+
+    # メインコンテナのモック
+    mock_main_container = MagicMock(name="mock_main_container")
+    mock_main_container.query_selector_all.return_value = [mock_item] # コンテナ内に1つのアイテム
+
+    if main_container_found:
+        # メインコンテナが見つかる場合の page.query_selector のモック
+        page_selectors = {
+            'ul.srp-results.srp-list': mock_main_container,
+            '#srp-river-results > ul': None # 1つ目で見つかる想定
+        }
+        mock_page.query_selector.side_effect = lambda selector: page_selectors.get(selector)
+        # フォールバック用の query_selector_all は呼ばれないはず
+        mock_page.query_selector_all = MagicMock(name="page_qs_all", side_effect=AssertionError("コンテナが見つかった場合、これは呼ばれないはず"))
+
+    else:
+        # メインコンテナが見つからない場合の page.query_selector のモック
+        page_selectors = {
+            'ul.srp-results.srp-list': None,
+            '#srp-river-results > ul': None
+        }
+        mock_page.query_selector.side_effect = lambda selector: page_selectors.get(selector)
+        # フォールバック用の query_selector_all を設定
+        mock_page.query_selector_all.return_value = [mock_item] # フォールバックで1つのアイテム
+
     # 商品データの抽出実行
     results = ebay_scraper._extract_items_data(mock_page)
-    
-    # 検証
+
+    # --- 検証 ---
     assert len(results) == 1
     item_data = results[0]
-    assert item_data['item_id'] == "123456789"
-    assert item_data['title'] == "Test Item"
-    assert item_data['price'] == 10.99
-    assert item_data['currency'] == "USD"
-    assert item_data['shipping_price'] == 0.0
-    assert item_data['listing_type'] == "fixed_price"
-    assert item_data['condition'] == "New"
-    assert item_data['image_url'] == "https://example.com/img.jpg"
+
+    # 各フィールドの値の検証 (strip() が適用されているかも確認)
+    assert item_data.get('item_id') == "123456789"
+    assert item_data.get('title') == "Test Item"
+    assert item_data.get('price') == 10.99
+    assert item_data.get('currency') == "USD"
+    assert item_data.get('shipping_price') == 0.0
+    assert item_data.get('seller_name') == "seller123"
+    assert item_data.get('seller_feedback_count') == 1234
+    assert item_data.get('seller_rating') == 0.998
+    assert item_data.get('bids_count') == 0 # 入札なし
+    assert item_data.get('condition') == "New"
+    assert item_data.get('listing_type') == "fixed_price" # BuyItNow要素があるため
+    assert item_data.get('is_buy_it_now') is True
+    assert 'auction_end_time' not in item_data # オークションではない
+    assert item_data.get('image_url') == "https://example.com/img.jpg"
+
+    # どのパスでアイテムが取得されたか確認
+    if main_container_found:
+        mock_page.query_selector.assert_any_call('ul.srp-results.srp-list') # 呼ばれたはず
+        mock_main_container.query_selector_all.assert_called_once_with(':scope > li.s-item') # :scopeセレクタ確認
+        mock_page.query_selector_all.assert_not_called() # フォールバックは呼ばれていない
+    else:
+        mock_page.query_selector.assert_any_call('ul.srp-results.srp-list')
+        mock_page.query_selector.assert_any_call('#srp-river-results > ul')
+        mock_page.query_selector_all.assert_called_once_with('li.s-item:has(div.s-item__image-wrapper)') # フォールバックセレクタ確認
+        mock_main_container.query_selector_all.assert_not_called() # メインコンテナのメソッドは呼ばれない
 
 @patch('pathlib.Path.mkdir')
 def test_save_debug_screenshot(mock_mkdir, ebay_scraper):

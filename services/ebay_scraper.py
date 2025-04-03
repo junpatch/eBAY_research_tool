@@ -349,7 +349,7 @@ class EbayScraper:
             page.click('#sgnBt')
             
             # ログイン後のページが読み込まれるまで待機
-            page.wait_for_load_state('networkidle')
+            page.wait_for_load_state('load')
             
             # ログイン成功の確認
             # 通常はユーザー名が表示されるか、特定の要素が存在するかで判断
@@ -481,7 +481,7 @@ class EbayScraper:
                             break
                         
                         # ページが完全に読み込まれるまで待機
-                        page.wait_for_load_state("networkidle")
+                        page.wait_for_load_state("load")
                         
                         # ページを少しスクロールして動的コンテンツを読み込む
                         self._scroll_page(page)
@@ -565,15 +565,21 @@ class EbayScraper:
         """
         results = []
         
-        # 商品リスト要素を取得
-        items = page.query_selector_all('li.s-item')
-        
+        # メインの検索結果リスト要素を取得 (より具体的に)
+        # eBayのHTML構造は変更される可能性があるため、複数の可能性のあるセレクタを試す
+        main_results_container = page.query_selector('ul.srp-results.srp-list') or page.query_selector('#srp-river-results > ul')
+        if not main_results_container:
+            logger.warning("メインの検索結果コンテナが見つかりません。ページのHTML構造が変わった可能性があります。")
+            # コンテナが見つからない場合は、ページ全体のアイテムを試すが、警告を出す
+            items = page.query_selector_all('li.s-item:has(div.s-item__image-wrapper)')
+            logger.debug(f"フォールバック：ページ全体から {len(items)} 件の候補アイテムを取得しました。")
+        else:
+            # :scope を使用してコンテナ直下の li.s-item のみを対象とする（広告もスキップ）
+            items = main_results_container.query_selector_all(':scope > li.s-item')
+            logger.debug(f"メインコンテナから {len(items)} 件の候補アイテムを取得しました。")
+
         for item in items:
             try:
-                # 広告をスキップ
-                if item.query_selector('.s-item__info-col .s-item__title--tagblock'):
-                    continue
-                    
                 # 商品データを抽出
                 item_data = {}
                 
