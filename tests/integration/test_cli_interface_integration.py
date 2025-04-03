@@ -153,7 +153,7 @@ class TestCliInterfaceIntegration:
         
         # 結果の検証
         assert result.exit_code == 0
-        assert "統計情報の表示が完了しました" in result.stdout
+        assert "データベース統計の表示が完了しました" in result.stdout
         assert "キーワード" in result.stdout
         assert "10" in result.stdout
         
@@ -212,7 +212,7 @@ class TestCliInterfaceIntegration:
         
         # 結果の検証
         assert result.exit_code == 0
-        assert "データベースをクリーンアップしました" in result.stdout
+        assert "データベースを初期化しました" in result.stdout
         assert "キーワード: 5件" in result.stdout
         
         # モックが正しく呼び出されたことを確認

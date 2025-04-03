@@ -56,7 +56,10 @@ class DataExporter:
             job_id (int, optional): 特定のジョブIDの結果をエクスポートする場合に指定
             
         Returns:
-            str: エクスポートされたファイルのパス、またはGoogle SheetのURL
+            dict: エクスポート結果を含む辞書
+                - path: エクスポートされたファイルのパス、またはGoogle SheetのURL
+                - is_empty: データが空だった場合はTrue
+                - count: エクスポートされたレコード数
         """
         # 出力形式が指定されていない場合はデフォルトを使用
         if output_format is None:
@@ -64,11 +67,17 @@ class DataExporter:
         
         # 結果が指定されていない場合はDBから取得
         if results is None:
-            results = self._get_results_from_db(keyword_id, job_id)
+            try:
+                results = self._get_results_from_db(keyword_id, job_id)
+            except Exception as e:
+                logger.error(f"データベースからの結果取得中にエラーが発生しました: {e}")
+                return None
             
-        if not results:
-            logger.warning("エクスポートする結果がありません。")
-            return None
+        is_empty = not results
+        if is_empty:
+            logger.warning("エクスポートする結果がありません。空のファイルが作成されます。")
+            # 空の結果セットでも処理を続行するために空のリストを設定
+            results = []
             
         # DataFrame作成
         df = pd.DataFrame(results)
@@ -96,15 +105,26 @@ class DataExporter:
                 output_path = filename
                 
         # 形式に応じてエクスポート
+        output_file_path = None
         if output_format.lower() == 'csv':
-            return self.export_to_csv(df, output_path)
+            output_file_path = self.export_to_csv(df, output_path)
         elif output_format.lower() == 'excel':
-            return self.export_to_excel(df, output_path)
+            output_file_path = self.export_to_excel(df, output_path)
         elif output_format.lower() == 'google_sheets':
-            return self.export_to_google_sheets(df, output_path)
+            output_file_path = self.export_to_google_sheets(df, output_path)
         else:
             logger.error(f"サポートされていない形式です: {output_format}")
             return None
+            
+        if output_file_path is None:
+            return None
+            
+        # 結果を辞書として返す
+        return {
+            "path": output_file_path,
+            "is_empty": is_empty,
+            "count": len(results)
+        }
     
     def export_to_csv(self, data, file_path=None):
         """
@@ -122,9 +142,9 @@ class DataExporter:
             if not isinstance(data, pd.DataFrame):
                 data = pd.DataFrame(data)
                 
+            # データが空でも処理を続行する
             if data.empty:
-                logger.error("エクスポートする結果がありません")
-                return None
+                logger.warning("エクスポートするデータが空です。空のCSVファイルを作成します。")
             
             # 出力ファイルパスの設定
             if file_path is None:
@@ -135,6 +155,17 @@ class DataExporter:
                     logger.error("無効なファイルパスが指定されました")
                     return None
                 file_path = Path(file_path)
+                
+            # 出力ディレクトリが存在するか確認
+            if not file_path.parent.exists():
+                logger.error(f"出力ディレクトリが存在しません: {file_path.parent}")
+                try:
+                    # ディレクトリを作成しようとする
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"出力ディレクトリを作成しました: {file_path.parent}")
+                except Exception as e:
+                    logger.error(f"出力ディレクトリの作成に失敗しました: {e}")
+                    return None
                 
             # CSVに出力
             data.to_csv(file_path, index=False, encoding='utf-8-sig')  # BOM付きUTF-8（Excelでの文字化け対策）
@@ -165,9 +196,9 @@ class DataExporter:
             if not isinstance(data, pd.DataFrame):
                 data = pd.DataFrame(data)
                 
+            # データが空でも処理を続行する
             if data.empty:
-                logger.error("エクスポートする結果がありません")
-                return None
+                logger.warning("エクスポートするデータが空です。空のExcelファイルを作成します。")
             
             # 出力ファイルパスの設定
             if file_path is None:
@@ -178,16 +209,28 @@ class DataExporter:
                     logger.error("無効なファイルパスが指定されました")
                     return None
                 file_path = Path(file_path)
+            
+            # 出力ディレクトリが存在するか確認
+            if not file_path.parent.exists():
+                logger.error(f"出力ディレクトリが存在しません: {file_path.parent}")
+                try:
+                    # ディレクトリを作成しようとする
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"出力ディレクトリを作成しました: {file_path.parent}")
+                except Exception as e:
+                    logger.error(f"出力ディレクトリの作成に失敗しました: {e}")
+                    return None
                 
             # Excelに出力
             writer = pd.ExcelWriter(file_path, engine='openpyxl')
             data.to_excel(writer, sheet_name='eBay検索結果', index=False)
             
-            # 列幅の自動調整
-            worksheet = writer.sheets['eBay検索結果']
-            for i, column in enumerate(data.columns):
-                column_width = max(data[column].astype(str).map(len).max(), len(column) + 2)
-                worksheet.column_dimensions[chr(65 + i)].width = min(column_width, 50)  # 最大幅を50に制限
+            # 列幅の自動調整 - データが空でない場合のみ実行
+            if not data.empty:
+                worksheet = writer.sheets['eBay検索結果']
+                for i, column in enumerate(data.columns):
+                    column_width = max(data[column].astype(str).map(len).max(), len(column) + 2)
+                    worksheet.column_dimensions[chr(65 + i)].width = min(column_width, 50)  # 最大幅を50に制限
                 
             writer.close()
             
@@ -219,6 +262,13 @@ class DataExporter:
             # DataFrameでない場合はDataFrameに変換
             if not isinstance(data, pd.DataFrame):
                 data = pd.DataFrame(data)
+            
+            # データが空でも処理を続行する
+            if data.empty:
+                logger.warning("エクスポートするデータが空です。空のスプレッドシートを作成します。")
+                # 空のデータの場合、少なくとも列名（空の場合はインデックス）を用意する
+                if len(data.columns) == 0:
+                    data = pd.DataFrame(columns=['item_id', 'title', 'price', 'currency'])
             
             # シート名が指定されていない場合はデフォルト名
             sheet_name = sheet_name or 'eBay検索結果'
@@ -266,14 +316,30 @@ class DataExporter:
                 # EbaySearchResultの全データを取得
                 query = session.query(EbaySearchResult)
                 
+                # クエリ条件の指定
                 if keyword_id:
+                    logger.debug(f"キーワードID {keyword_id} でフィルタリングします")
                     query = query.filter(EbaySearchResult.keyword_id == keyword_id)
                     
-                # ジョブIDの場合は、そのジョブで処理されたキーワードIDを特定する必要がある
-                # 実装例：この部分は実際のデータベーススキーマに応じて調整が必要
+                # ジョブIDの場合は、そのジョブで処理されたキーワードIDを特定する
+                if job_id:
+                    logger.debug(f"ジョブID {job_id} でフィルタリングします")
+                    query = query.filter(EbaySearchResult.search_job_id == job_id)
                 
                 search_results = query.all()
-                logger.info(f"データベースから{len(search_results)}件の結果を取得しました。")
+                result_count = len(search_results)
+                logger.info(f"データベースから{result_count}件の結果を取得しました。")
+                
+                # 結果が0件の場合は詳細なログを出力
+                if result_count == 0:
+                    if keyword_id:
+                        # キーワードの存在確認
+                        keyword_exists = session.query(session.query(Keyword).filter(Keyword.id == keyword_id).exists()).scalar()
+                        logger.info(f"キーワードID {keyword_id} の存在: {keyword_exists}")
+                    
+                    # 全体の検索結果数を確認
+                    total_results = session.query(EbaySearchResult).count()
+                    logger.info(f"データベース内の総検索結果数: {total_results}")
                 
                 # 結果を辞書のリストに変換
                 for result in search_results:
@@ -291,6 +357,10 @@ class DataExporter:
                         if keyword:
                             result_dict['keyword'] = keyword.keyword
                             result_dict['category'] = keyword.category
+                        else:
+                            logger.warning(f"キーワードID {result.keyword_id} の情報が見つかりません")
+                            result_dict['keyword'] = f"ID: {result.keyword_id}"
+                            result_dict['category'] = "不明"
                     
                     results.append(result_dict)
                     
