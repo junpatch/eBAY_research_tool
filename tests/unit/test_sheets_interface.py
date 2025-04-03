@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from interfaces.sheets_interface import GoogleSheetsInterface
 
 @pytest.fixture
-def mock_config():
+def mock_config(tmp_path):
     """設定マネージャーのモック"""
     mock_config = MagicMock()
     # 必要な設定値を設定
@@ -25,7 +25,8 @@ def mock_config():
             return default
     
     mock_config.get.side_effect = config_get_side_effect
-    mock_config.get_path.return_value = Path('/mock/path/google_token')
+    token_dir_path = tmp_path / "google_token"
+    mock_config.get_path.return_value = token_dir_path
     return mock_config
 
 @pytest.fixture
@@ -88,12 +89,14 @@ def mock_service():
     
     return mock_svc
 
-def test_init(sheets_interface):
+def test_init(sheets_interface, tmp_path):
     """初期化のテスト"""
     assert sheets_interface.credentials_path == 'credentials.json'
     assert sheets_interface.scopes == ['https://www.googleapis.com/auth/spreadsheets']
-    assert sheets_interface.token_dir == Path('/mock/path/google_token')
-    assert sheets_interface.token_path == Path('/mock/path/google_token/token.json')
+    # tmp_path を使った期待値に変更
+    expected_token_dir = tmp_path / "google_token"
+    assert sheets_interface.token_dir == expected_token_dir
+    assert sheets_interface.token_path == expected_token_dir / 'token.json'
     assert sheets_interface.service is None
 
 def test_authenticate_with_valid_token(sheets_interface, mock_credentials, mock_service):

@@ -1,5 +1,5 @@
 # eBay Research Tool Dependencies
-# Python >= 3.8, < 3.12
+# Python >= 3.9, < 3.12
 
 # Web Automation
 playwright==1.40.0
@@ -38,4 +38,4 @@ tenacity==8.2.3  # Retrying library
 tqdm==4.66.1  # Progress bars
 
 pytest-asyncio==0.21.1
-pytest-cov
+pytest-cov==4.1.0

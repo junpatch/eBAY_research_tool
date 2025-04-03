@@ -148,3 +148,7 @@ class LoggerManager:
         if name is None:
             return self.logger
         return logging.getLogger(f"{self.app_name}.{name}")
+
+# グローバルなロガーインスタンスを作成
+logger_manager = LoggerManager()
+logger = logger_manager.get_logger()
