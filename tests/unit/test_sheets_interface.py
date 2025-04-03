@@ -89,12 +89,14 @@ def mock_service():
     
     return mock_svc
 
-def test_init(sheets_interface):
+def test_init(sheets_interface, tmp_path):
     """初期化のテスト"""
     assert sheets_interface.credentials_path == 'credentials.json'
     assert sheets_interface.scopes == ['https://www.googleapis.com/auth/spreadsheets']
-    assert sheets_interface.token_dir == Path('/mock/path/google_token')
-    assert sheets_interface.token_path == Path('/mock/path/google_token/token.json')
+    # tmp_path を使った期待値に変更
+    expected_token_dir = tmp_path / "google_token"
+    assert sheets_interface.token_dir == expected_token_dir
+    assert sheets_interface.token_path == expected_token_dir / 'token.json'
     assert sheets_interface.service is None
 
 def test_authenticate_with_valid_token(sheets_interface, mock_credentials, mock_service):
