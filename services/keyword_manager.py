@@ -10,7 +10,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 import os.path
 import json
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from interfaces.sheets_interface import GoogleSheetsInterface
 
 logger = logging.getLogger(__name__)
@@ -245,5 +245,5 @@ class KeywordManager:
                 self.db.models.Keyword.id == keyword_id).first()
             if keyword:
                 keyword.status = status
-                keyword.last_searched_at = datetime.now(UTC) if status == 'completed' else keyword.last_searched_at
+                keyword.last_searched_at = datetime.now(timezone.utc) if status == 'completed' else keyword.last_searched_at
                 session.commit()
