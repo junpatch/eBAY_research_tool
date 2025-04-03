@@ -137,7 +137,7 @@ def search_keywords(
                 # 残り時間を計算
                 elapsed = time.time() - start_time
                 if i > 0:  # 最初のキーワード以降で残り時間を計算
-                    items_per_sec = i / elapsed
+                    items_per_sec = i / elapsed if elapsed > 0 else 0
                     remaining_items = len(keywords) - i
                     remaining_seconds = remaining_items / items_per_sec if items_per_sec > 0 else 0
                     
