@@ -11,7 +11,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 import os.path
 import json
-from models.data_models import EbaySearchResult, ExportHistory
+from models.data_models import EbaySearchResult, ExportHistory, Keyword
 from interfaces.sheets_interface import GoogleSheetsInterface
 
 logger = logging.getLogger(__name__)
@@ -62,8 +62,8 @@ class DataExporter:
         if output_format is None:
             output_format = self.default_format
         
-        # 結果が指定されておらず、キーワードIDまたはジョブIDが指定されている場合はDBから取得
-        if results is None and (keyword_id or job_id):
+        # 結果が指定されていない場合はDBから取得
+        if results is None:
             results = self._get_results_from_db(keyword_id, job_id)
             
         if not results:
@@ -263,6 +263,7 @@ class DataExporter:
         
         try:
             with self.db.session_scope() as session:
+                # EbaySearchResultの全データを取得
                 query = session.query(EbaySearchResult)
                 
                 if keyword_id:
@@ -271,17 +272,35 @@ class DataExporter:
                 # ジョブIDの場合は、そのジョブで処理されたキーワードIDを特定する必要がある
                 # 実装例：この部分は実際のデータベーススキーマに応じて調整が必要
                 
+                search_results = query.all()
+                logger.info(f"データベースから{len(search_results)}件の結果を取得しました。")
+                
                 # 結果を辞書のリストに変換
-                for result in query.all():
+                for result in search_results:
                     result_dict = {}
                     for column in result.__table__.columns:
                         result_dict[column.name] = getattr(result, column.name)
+                        
+                    # キーワード情報を追加
+                    if hasattr(result, 'keyword') and result.keyword:
+                        result_dict['keyword'] = result.keyword.keyword
+                        result_dict['category'] = result.keyword.category
+                    else:
+                        # キーワード情報を別途取得
+                        keyword = session.query(Keyword).filter(Keyword.id == result.keyword_id).first()
+                        if keyword:
+                            result_dict['keyword'] = keyword.keyword
+                            result_dict['category'] = keyword.category
+                    
                     results.append(result_dict)
                     
+            logger.debug(f"変換後の結果数: {len(results)}")
             return results
             
         except Exception as e:
             logger.error(f"データベースからの結果取得中にエラーが発生しました: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
     
     def _format_columns(self, df):

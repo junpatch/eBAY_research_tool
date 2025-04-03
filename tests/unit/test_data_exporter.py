@@ -538,8 +538,9 @@ def test_get_results_from_db(data_exporter, mock_db):
         # 空のリストが返されることを確認
         assert results == []
         # ロガーのerrorメソッドが呼ばれたことを確認
-        mock_logger.error.assert_called_once()
-        assert "エラー" in mock_logger.error.call_args[0][0]
+        assert mock_logger.error.call_count == 2  # 2回呼び出されることを期待
+        assert "エラー" in mock_logger.error.call_args_list[0][0][0]  # 最初の呼び出しのメッセージを確認
+        assert "Traceback" in mock_logger.error.call_args_list[1][0][0]  # 2回目の呼び出しはトレースバック
 
 def test_format_columns(data_exporter):
     """_format_columnsメソッドのテストを実施します"""

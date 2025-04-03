@@ -53,9 +53,26 @@ class TestKeywordSearchFlow:
     def teardown_method(self):
         """各テストメソッド実行後のクリーンアップ"""
         if hasattr(self, 'db_manager'):
+            # データベース接続を明示的に閉じる
             self.db_manager.close()
+            # 確実にエンジンの後始末をする
+            self.db_manager = None
+            
+        # メモリ内データベースを明示的に閉じる
         if hasattr(self, 'db_engine'):
             self.db_engine.dispose()
+            self.db_engine = None
+            
+        # Session ファクトリをクリーンアップ
+        if hasattr(self, 'Session'):
+            if hasattr(self.Session, 'remove'):  # scoped_sessionの場合
+                self.Session.remove()
+            # sessionmakerのインスタンスをクリア
+            self.Session = None
+            
+        # ガベージコレクションを強制実行して未参照のリソースを解放
+        import gc
+        gc.collect()
 
     def test_single_keyword_import_and_search(self):
         """単一キーワードのインポートと検索テスト"""

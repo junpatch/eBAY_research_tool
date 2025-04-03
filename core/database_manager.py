@@ -7,6 +7,7 @@ from models.data_models import Base, Keyword, EbaySearchResult, SearchHistory, E
 from contextlib import contextmanager
 import logging
 from datetime import datetime
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +26,29 @@ class DatabaseManager:
         self.SessionFactory = sessionmaker(bind=self.engine)
         self.Session = scoped_session(self.SessionFactory)
         
+    def __enter__(self):
+        """コンテキストマネージャーのエントリーポイント"""
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """コンテキストマネージャーの終了処理"""
+        self.close()
+        
     def close(self):
         """データベース接続を閉じる"""
-        self.Session.remove()
-        self.engine.dispose()
-        logger.info("データベース接続を閉じました。")
+        try:
+            # 既存のセッションをすべて削除
+            self.Session.remove()
+            
+            # エンジンのコネクションプールを処理中のコネクションを含めて全て閉じる
+            self.engine.dispose()
+            
+            # Windows環境でのファイルロック解除のための少しの待機
+            time.sleep(0.1)
+            
+            logger.info("データベース接続を閉じました。")
+        except Exception as e:
+            logger.error(f"データベース接続を閉じる際にエラーが発生しました: {e}")
         
     def create_tables(self):
         """テーブルの作成"""
