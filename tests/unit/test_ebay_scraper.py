@@ -10,20 +10,20 @@ import urllib.parse
 def mock_config():
     """設定のモック"""
     config = MagicMock()
-    config.get = lambda path, default=None, value_type=None: {
+    config.get = MagicMock(side_effect=lambda *args, **kwargs: {
         ('ebay', 'base_url'): 'https://www.ebay.com',
         ('ebay', 'username'): 'test_user',
         ('ebay', 'password'): 'test_pass',
         ('scraping', 'headless'): True,
         ('scraping', 'user_agent'): 'test_agent',
-        ('ebay', 'search', 'request_delay'): 3,  # 2秒から3秒に変更
+        ('ebay', 'search', 'request_delay'): 3,
         ('database', 'url'): 'sqlite:///:memory:',
-        ('ebay', 'search', 'timeout'): 60,  # 60秒に変更
-    }.get(tuple(path), default)
+        ('ebay', 'search', 'timeout'): 60,
+    }.get(tuple(args[0]), args[1] if len(args) > 1 else None))
     
-    config.get_with_env = lambda path, env_key, default=None, value_type=None: {
+    config.get_with_env = MagicMock(side_effect=lambda *args, **kwargs: {
         (('ebay', 'base_url'), 'EBAY_BASE_URL'): 'https://www.ebay.com',
-    }.get((tuple(path), env_key), default)
+    }.get((tuple(args[0]), args[1]), args[2] if len(args) > 2 else None))
     
     return config
 
