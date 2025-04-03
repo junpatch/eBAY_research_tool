@@ -57,5 +57,6 @@ input.csv
 windsurf.json
 data/
 
-# windsurf rules
+# rules
 .windsurfrules
+.cursor

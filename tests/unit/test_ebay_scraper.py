@@ -10,7 +10,7 @@ import urllib.parse
 def mock_config():
     """設定のモック"""
     config = MagicMock()
-    config.get = lambda path, default=None: {
+    config.get = lambda path, default=None, value_type=None: {
         ('ebay', 'base_url'): 'https://www.ebay.com',
         ('ebay', 'username'): 'test_user',
         ('ebay', 'password'): 'test_pass',
@@ -20,6 +20,11 @@ def mock_config():
         ('database', 'url'): 'sqlite:///:memory:',
         ('ebay', 'search', 'timeout'): 60,  # 60秒に変更
     }.get(tuple(path), default)
+    
+    config.get_with_env = lambda path, env_key, default=None, value_type=None: {
+        (('ebay', 'base_url'), 'EBAY_BASE_URL'): 'https://www.ebay.com',
+    }.get((tuple(path), env_key), default)
+    
     return config
 
 @pytest.fixture
