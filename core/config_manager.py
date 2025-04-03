@@ -5,10 +5,18 @@ import yaml
 from pathlib import Path
 from dotenv import load_dotenv
 from functools import reduce
+from core.logger_manager import logger
 
 class ConfigManager:
     """アプリケーション設定を管理するクラス"""
     
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(ConfigManager, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, config_path=None):
         """
         設定マネージャーの初期化
@@ -19,21 +27,38 @@ class ConfigManager:
         # 環境変数の読み込み
         load_dotenv()
 
-        self.base_dir = Path(__file__).parent.parent
+        self.base_dir = Path(__file__).resolve().parent.parent
         
         # 設定ファイルのパスを決定
         if config_path is None:
-            config_path = os.environ.get('CONFIG_PATH', str(self.base_dir / 'config' / 'config.yaml'))
-        
-        config_path = Path(config_path)
+            # CI環境かどうかを判定
+            is_ci_environment = os.environ.get('CI') == 'true'
+            if is_ci_environment:
+                # CI環境ではテスト用設定ファイルを使用
+                default_config_filename = 'config.test.yaml'
+                logger.info("CI環境を検出しました。テスト設定ファイルを使用します。")
+            else:
+                # 通常環境では本番用設定ファイルを使用
+                default_config_filename = 'config.yaml'
+                logger.info("通常環境として設定ファイルを読み込みます。")
+            
+            config_path = os.environ.get('CONFIG_PATH', str(self.base_dir / 'config' / default_config_filename))
+
+        config_path = Path(config_path).resolve()
             
         # 設定ファイルの存在確認
         if not config_path.exists():
+            logger.error(f"設定ファイルが見つかりません: {config_path}")
             raise FileNotFoundError(f"設定ファイルが見つかりません: {config_path}")
             
+        self.config_path = config_path
+        self.config = self._load_config()
+        logger.info(f"設定ファイルを読み込みました: {self.config_path}")
+            
+    def _load_config(self):
         # 設定の読み込み
-        with open(config_path, 'r', encoding='utf-8') as file:
-            self.config = yaml.safe_load(file)
+        with open(self.config_path, 'r', encoding='utf-8') as file:
+            return yaml.safe_load(file)
             
     def get(self, keys, default=None, value_type=None):
         """

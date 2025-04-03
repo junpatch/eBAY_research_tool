@@ -1,4 +1,3 @@
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -47,11 +46,14 @@ logs/
 Thumbs.db
 
 # Secrets
-config.yaml
+config.yaml # Ignore production config
 secrets.json
-credentials.json
+credentials.json # Ignore production credentials
 .env
 
+# Keep test config files
+!config/config.test.yaml
+!config/credentials.test.json
 
 input.csv
 windsurf.json

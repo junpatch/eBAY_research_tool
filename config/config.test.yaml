@@ -1,0 +1,53 @@
+# Test Configuration for eBay Research Tool
+
+# Application Settings
+application:
+  name: "eBay Research Tool (Test)"
+  version: "0.1.0"
+  log_level: "DEBUG" # More verbose logging for tests
+  log_dir: "./logs_test" # Separate log directory for tests
+
+# Database Settings
+database:
+  type: "sqlite"
+  path: ":memory:" # Use in-memory database for tests
+  echo: false
+
+# eBay Settings
+ebay:
+  base_url: "https://www.ebay.com"
+  country: "US"
+  login:
+    username_env: "EBAY_USERNAME_TEST" # Dummy env var
+    password_env: "EBAY_PASSWORD_TEST" # Dummy env var
+  search:
+    items_per_page: 10 # Reduce items for faster tests
+    max_pages: 1
+    request_delay: 0 # No delay for tests
+    timeout: 30
+
+# Google Sheets Settings
+google_sheets:
+  credentials_path: "./config/credentials.test.json" # Use dummy credentials
+  token_dir: "./data/google_token_test" # Separate token dir for tests
+  scopes:
+    - "https://www.googleapis.com/auth/spreadsheets"
+  spreadsheet_id: "DUMMY_SPREADSHEET_ID" # Dummy value
+  range_name: "Sheet1!A1:B10" # Dummy value
+
+# Scraping Settings
+scraping:
+  headless: true # Usually true for CI
+  user_agent: "Mozilla/5.0 (Test Agent) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+  proxy:
+    enabled: false
+    url: ""
+  retry:
+    max_attempts: 1 # Reduce retries for tests
+    min_wait: 0
+    max_wait: 1
+
+# Export Settings
+export:
+  default_format: "csv"
+  output_dir: "./data/exports_test" # Separate export dir for tests
