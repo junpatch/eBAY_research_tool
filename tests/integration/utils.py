@@ -10,6 +10,8 @@ from datetime import datetime
 from contextlib import contextmanager
 from sqlalchemy import create_engine
 from models.data_models import Base
+import logging
+import time
 
 # プロジェクトのルートパス
 ROOT_DIR = Path(__file__).parent.parent.parent
@@ -75,7 +77,13 @@ def setup_test_database():
         yield engine
     finally:
         # エンジンを閉じる（インメモリDBなので自動的にクリーンアップされる）
-        engine.dispose()
+        try:
+            engine.dispose()
+            # Windows環境でのファイルロック解除のための少しの待機
+            time.sleep(0.1)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"データベースエンジンを閉じる際にエラーが発生しました: {e}")
 
 @contextmanager
 def temp_directory():

@@ -59,9 +59,22 @@ class TestErrorHandlingFlow:
 
     def teardown_method(self):
         """各テストメソッド実行後のクリーンアップ"""
+        # データベースマネージャーを閉じる
         if hasattr(self, 'db_manager'):
+            # データベース接続を明示的に閉じる
             self.db_manager.close()
+            self.db_manager = None
+            
+        # ロギングハンドラをクリーンアップ
+        for handler in logging.getLogger().handlers[:]:
+            handler.close()
+            logging.getLogger().removeHandler(handler)
+            
+        # 一時ディレクトリのクリーンアップ
         if hasattr(self, 'temp_dir'):
+            # ガベージコレクションを強制実行して未参照のリソースを解放
+            import gc
+            gc.collect()
             self.temp_dir.cleanup()
 
     @patch('sqlalchemy.create_engine')

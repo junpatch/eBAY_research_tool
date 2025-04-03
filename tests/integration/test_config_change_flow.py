@@ -39,6 +39,16 @@ class TestConfigChangeFlow:
 
     def teardown_method(self):
         """各テストメソッド実行後のクリーンアップ"""
+        # データベースマネージャーを閉じる（もし存在していれば）
+        if hasattr(self, 'db_manager'):
+            self.db_manager.close()
+            self.db_manager = None
+            
+        # クリーンアップ前にガベージコレクションを実行
+        import gc
+        gc.collect()
+        
+        # 一時ディレクトリのクリーンアップ
         if hasattr(self, 'temp_dir'):
             self.temp_dir.cleanup()
 
