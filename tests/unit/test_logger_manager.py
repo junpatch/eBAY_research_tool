@@ -74,7 +74,7 @@ def test_default_log_dir():
         logger_manager = LoggerManager()
         
         # デフォルトのログディレクトリはcore/logger_manager.pyの親の親/logsになるはず
-        expected_log_dir = Path(__file__).parent.parent / 'logs'
+        expected_log_dir = Path(__file__).parent.parent.parent / 'logs'
         assert logger_manager.log_dir == expected_log_dir
         
         # ディレクトリが作成されたこと（mkdirが呼ばれたこと）を確認
