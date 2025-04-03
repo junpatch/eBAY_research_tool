@@ -184,6 +184,37 @@ def test_import_keywords_exception(mock_config, mock_logger, mock_db, mock_keywo
     # ロガーが例外を記録したことを確認
     mock_logger.error.assert_called_once()
 
+def test_import_keywords_invalid_csv_format(mock_config, mock_logger, mock_db, mock_keyword_manager, mock_file_exists):
+    """不正な形式のCSVファイルでのインポートテスト"""
+    # KeywordManagerがCSVパースエラーを発生させるようにモック
+    mock_keyword_manager.import_from_csv.side_effect = ValueError("Invalid CSV format")
+
+    # コマンド実行
+    result = runner.invoke(app, ["import", "--format", "csv", "--file", "invalid.csv"])
+
+    # 結果確認
+    assert result.exit_code == 1
+    assert "エラー" in result.stdout
+    assert "インポート中に問題が発生しました: Invalid CSV format" in result.stdout
+    mock_logger.error.assert_called_once()
+    args, kwargs = mock_logger.error.call_args
+    assert "キーワードインポート中にエラーが発生しました" in args[0]
+    assert kwargs.get('exc_info') is None
+
+def test_import_keywords_empty_csv(mock_config, mock_logger, mock_db, mock_keyword_manager, mock_file_exists):
+    """空のCSVファイルでのインポートテスト"""
+    # KeywordManagerが0件返すようにモック
+    mock_keyword_manager.import_from_csv.return_value = 0
+
+    # コマンド実行
+    result = runner.invoke(app, ["import", "--format", "csv", "--file", "empty.csv"])
+
+    # 結果確認
+    assert result.exit_code == 0
+    assert "成功" in result.stdout
+    assert "0個のキーワード" in result.stdout
+    mock_keyword_manager.import_from_csv.assert_called_once()
+
 # searchコマンドのテスト
 def test_search_keywords(mock_config, mock_logger, mock_db, mock_keyword_manager, mock_scraper, mock_exporter):
     """キーワード検索テスト"""
