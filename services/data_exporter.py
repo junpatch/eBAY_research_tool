@@ -126,13 +126,14 @@ class DataExporter:
             "count": len(results)
         }
     
-    def export_to_csv(self, data, file_path=None):
+    def export_to_csv(self, data, file_path=None, encoding='utf-8-sig'):
         """
         データをCSVファイルにエクスポートする
         
         Args:
             data: DataFrameまたはリスト
             file_path (str, optional): 出力ファイルパス
+            encoding (str, optional): 出力エンコーディング (デフォルト: 'utf-8-sig')
             
         Returns:
             str: エクスポートされたファイルのパス
@@ -167,8 +168,8 @@ class DataExporter:
                     logger.error(f"出力ディレクトリの作成に失敗しました: {e}")
                     return None
                 
-            # CSVに出力
-            data.to_csv(file_path, index=False, encoding='utf-8-sig')  # BOM付きUTF-8（Excelでの文字化け対策）
+            # CSVに出力 (引数 encoding を使用)
+            data.to_csv(file_path, index=False, encoding=encoding)
             
             # エクスポート履歴を記録
             self._record_export_history('csv', str(file_path), len(data))

@@ -56,6 +56,11 @@ def data_exporter(mock_config, mock_db):
     with patch('pathlib.Path.mkdir'):
         return DataExporter(mock_config, mock_db)
 
+@pytest.fixture
+def tmp_path(tmpdir):
+    """テスト関数ごとに一時ディレクトリを提供するfixture"""
+    return Path(str(tmpdir))
+
 def test_export_results(data_exporter, mock_db):
     """export_results機能のテストを実施します"""
     data = mock_db.get_search_results()
@@ -318,6 +323,74 @@ def test_export_to_csv(data_exporter, mock_db, tmp_path):
     # 無効なファイルパス
     result = data_exporter.export_to_csv(data, "")
     assert result is None  # None が返されることを確認
+
+def test_export_to_csv_with_special_chars(data_exporter, tmp_path):
+    """特殊文字を含むデータのCSVエクスポートをテストします"""
+    # 特殊文字を含むテストデータ
+    data_with_special_chars = [
+        {'id': 1, 'title': 'Item with comma,', 'description': 'Description with\nnewline', 'price': '"100"'},
+        {'id': 2, 'title': 'Item with "quotes"!', 'description': 'Single quote \' test', 'price': '200'},
+    ]
+    export_path = tmp_path / "special_chars_export.csv"
+
+    # エクスポート実行
+    output_path = data_exporter.export_to_csv(data_with_special_chars, export_path)
+
+    # 検証
+    assert output_path == str(export_path)
+    assert os.path.exists(export_path)
+
+    # pandasで読み込んで検証（quoting=csv.QUOTE_ALL相当で読み込まれるか）
+    try:
+        exported_data = pd.read_csv(export_path, encoding='utf-8')
+        # pandasはデフォルトで賢くクォートを解釈する
+        assert exported_data.iloc[0]['title'] == 'Item with comma,'
+        assert exported_data.iloc[0]['description'] == 'Description with\nnewline'
+        assert exported_data.iloc[0]['price'] == '"100"' # pandasはクォートを保持する場合がある
+        assert exported_data.iloc[1]['title'] == 'Item with "quotes"!'
+        assert exported_data.iloc[1]['description'] == "Single quote ' test"
+        assert exported_data.iloc[1]['price'] == '200'
+
+    except Exception as e:
+        # ファイルを手動で読み込んで確認（より厳密なチェック）
+        with open(export_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # 例えば、カンマや改行を含むフィールドがダブルクォートで囲まれているかなどを確認
+            assert '"Item with comma,"' in content
+            assert '"Description with\nnewline"' in content
+            assert '"""100"""' in content # 元々ダブルクォートで囲まれたものは二重になる
+            assert '"Item with ""quotes""!"' in content
+            assert '"Single quote '' test"' in content
+            assert ',200' in content # クォート不要なものはそのまま
+
+def test_export_to_csv_with_encoding(data_exporter, mock_db, tmp_path):
+    """指定したエンコーディングでのCSVエクスポートをテストします"""
+    data = mock_db.get_search_results()
+    encodings_to_test = ['utf-8', 'utf-8-sig', 'shift_jis']
+
+    for encoding in encodings_to_test:
+        export_path = tmp_path / f"test_export_{encoding}.csv"
+
+        # エクスポート実行 (encodingを指定)
+        output_path = data_exporter.export_to_csv(data, export_path, encoding=encoding)
+
+        # 検証
+        assert output_path == str(export_path)
+        assert os.path.exists(export_path)
+
+        # ファイルを読み込んでエンコーディングを確認
+        try:
+            with open(export_path, 'r', encoding=encoding) as f:
+                f.read()
+            # BOM付きUTF-8の場合、ファイルの先頭にBOMが存在するか確認
+            if encoding == 'utf-8-sig':
+                with open(export_path, 'rb') as f:
+                    assert f.read(3) == b'\xef\xbb\xbf'
+
+        except UnicodeDecodeError:
+            pytest.fail(f"ファイルが期待されるエンコーディング ({encoding}) でデコードできませんでした。")
+        except Exception as e:
+            pytest.fail(f"エンコーディング {encoding} のテスト中に予期せぬエラーが発生しました: {e}")
 
 def test_export_to_excel(data_exporter, mock_db, tmp_path):
     """Excelエクスポート機能をテストします"""
