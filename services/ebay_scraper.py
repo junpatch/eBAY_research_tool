@@ -268,6 +268,10 @@ class EbayScraper:
             logger.info("ブラウザを起動しました")
             return True
             
+        except PlaywrightTimeoutError as e:
+            logger.error(f"ブラウザ起動時にタイムアウトが発生しました: {e}")
+            self.close_browser()
+            return False
         except Exception as e:
             logger.error(f"ブラウザの起動に失敗しました: {e}")
             self.close_browser()
@@ -384,6 +388,10 @@ class EbayScraper:
             
         Returns:
             list: 検索結果のアイテムリスト
+            
+        Raises:
+            PlaywrightTimeoutError: ページ読み込みがタイムアウトした場合
+            Exception: その他のエラーが発生した場合
         """
         try:
             # ブラウザが起動していない場合は起動
@@ -395,7 +403,7 @@ class EbayScraper:
             # 検索URLの構築
             params = {
                 '_nkw': keyword,
-                '_ipg': 60,  # 1ページあたりの表示件数を100件に制限
+                '_ipg': 60  # 1ページあたりの表示件数を60件に制限
             }
             
             # カテゴリーの追加
@@ -455,16 +463,42 @@ class EbayScraper:
                     
                     # 新しいページを開く
                     page = self.context.new_page()
+                    
+                    # ページのコンソールログを記録
+                    page.on("console", lambda msg: logger.debug(f"ブラウザコンソール [{msg.type}]: {msg.text}"))
+                    
                     try:
                         # 検索ページに移動
-                        page.goto(url)
-                        page.wait_for_selector('.srp-results', state="visible", timeout=self.timeout)
+                        response = page.goto(url, wait_until="domcontentloaded")
+                        
+                        # レスポンスのステータスコードをチェック
+                        if response.status >= 400:
+                            error_msg = f"検索ページの読み込みに失敗しました。ステータスコード: {response.status}"
+                            logger.error(error_msg)
+                            # デバッグ用にスクリーンショットを保存
+                            self._save_debug_screenshot(page, f"error_{keyword}_page_{current_page}")
+                            page.close()
+                            break
+                        
+                        # ページが完全に読み込まれるまで待機
+                        page.wait_for_load_state("networkidle")
+                        
+                        # ページを少しスクロールして動的コンテンツを読み込む
+                        self._scroll_page(page)
+                        
+                        # 検索結果が見つからない場合のチェック
+                        page_content = page.content()
+                        if "0 件の結果" in page_content or "No exact matches found" in page_content:
+                            logger.info(f"キーワード '{keyword}' の検索結果が見つかりませんでした。")
+                            page.close()
+                            break
                         
                         # 商品データの抽出
                         items = self._extract_items_data(page)
                         
                         if not items:  # アイテムが見つからない場合は終了
                             logger.info(f"ページ {current_page} にアイテムが見つかりませんでした。検索を終了します。")
+                            page.close()
                             break
                             
                         all_items.extend(items)
@@ -472,8 +506,9 @@ class EbayScraper:
                         
                         # 次のページが存在するか確認
                         next_page = page.query_selector('.pagination__next:not(.disabled)')
-                        if not next_page:
+                        if not next_page or not next_page.is_enabled():
                             logger.info("最後のページに到達しました。")
+                            page.close()
                             break
                             
                         # ページ間の待機時間（レート制限対策）
@@ -482,30 +517,40 @@ class EbayScraper:
                         time.sleep(delay)
                         
                     except PlaywrightTimeoutError as e:
-                        logger.warning(f"タイムアウトが発生しました: {str(e)}")
+                        logger.warning(f"タイムアウトが発生しました: {e}")
                         self._save_debug_screenshot(page, f"{keyword}_page_{current_page}")
+                        page.close()
                         if max_retries > 0:
                             max_retries -= 1
                             continue
                         else:
-                            break
+                            raise  # リトライ回数を超えた場合は例外を再スロー
                     except Exception as e:
-                        logger.error(f"ページ {current_page} の処理中にエラーが発生しました: {str(e)}")
+                        logger.error(f"ページ {current_page} の処理中にエラーが発生しました: {e}")
                         self._save_debug_screenshot(page, f"{keyword}_page_{current_page}")
-                        break
-                    finally:
                         page.close()
+                        raise  # エラーを再スローしてリトライロジックに処理させる
+                    finally:
+                        # ページがまだ開いている場合は閉じる
+                        if page and not page.is_closed():
+                            page.close()
                         
                     current_page += 1
                     
                 except Exception as e:
-                    logger.error(f"ページ {current_page} の処理中にエラーが発生しました: {str(e)}")
-                    break
+                    logger.error(f"ページ {current_page} の処理中にエラーが発生しました: {e}")
+                    raise  # エラーを再スローしてリトライロジックに処理させる
                     
             return all_items
                 
+        except PlaywrightTimeoutError as e:
+            # タイムアウトエラーのログ記録
+            logger.error(f"検索中にタイムアウトエラーが発生しました: {e}")
+            # リトライロジックに任せる
+            raise
         except Exception as e:
-            logger.error(f"検索処理中にエラーが発生しました: {str(e)}")
+            # その他のエラーのログ記録
+            logger.error(f"検索処理中にエラーが発生しました: {e}")
             return []
     
     def _extract_items_data(self, page):
@@ -682,40 +727,28 @@ class EbayScraper:
     
     def _scroll_page(self, page):
         """
-        ページを下までスクロールして、すべてのコンテンツを読み込む
+        ページをスクロールして動的コンテンツを読み込む
         
         Args:
-            page: Playwrightのページオブジェクト
+            page: PlaywrightのPageオブジェクト
         """
         try:
             # ページの高さを取得
-            page_height = page.evaluate("""() => {
-                return Math.max(
-                    document.body.scrollHeight,
-                    document.documentElement.scrollHeight,
-                    document.body.offsetHeight,
-                    document.documentElement.offsetHeight,
-                    document.body.clientHeight,
-                    document.documentElement.clientHeight
-                );
-            }""")
+            height = page.evaluate("() => document.documentElement.scrollHeight")
             
-            # スクロール位置
-            current_position = 0
-            scroll_step = 100
-            
-            while current_position < page_height:
-                # スクロール実行
-                page.evaluate(f"window.scrollTo(0, {current_position});")
-                # ランダムな待機時間（100-300ms）
-                time.sleep(random.uniform(0.1, 0.3))
-                current_position += scroll_step
+            # 少しずつスクロールする
+            for i in range(1, 6):  # 5回スクロール
+                # ページの20%ずつスクロールする
+                scroll_to = int(height * i * 0.2)
+                page.evaluate(f"window.scrollTo(0, {scroll_to})")
+                time.sleep(0.1)  # スクロール間の待機時間
                 
-            # ページトップに戻る（自然な動作をシミュレート）
-            page.evaluate("window.scrollTo(0, 0);")
+            # 最後に一番上に戻る
+            page.evaluate("window.scrollTo(0, 0)")
             
         except Exception as e:
             logger.warning(f"ページスクロール中にエラーが発生しました: {e}")
+            # 処理を続行するため、例外は投げない
     
     def __enter__(self):
         """

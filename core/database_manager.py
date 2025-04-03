@@ -22,9 +22,15 @@ class DatabaseManager:
             db_url (str): データベースURL
             echo (bool): SQLの出力を有効にするかどうか
         """
-        self.engine = create_engine(db_url, echo=echo)
-        self.SessionFactory = sessionmaker(bind=self.engine)
-        self.Session = scoped_session(self.SessionFactory)
+        try:
+            self.engine = create_engine(db_url, echo=echo)
+            self.SessionFactory = sessionmaker(bind=self.engine)
+            self.Session = scoped_session(self.SessionFactory)
+            logger.info(f"データベース接続を確立しました: {db_url}")
+        except Exception as e:
+            logger.error(f"データベース接続エラー: {e}")
+            # エラーを再発生させて上位の呼び出し元に通知する
+            raise
         
     def __enter__(self):
         """コンテキストマネージャーのエントリーポイント"""
