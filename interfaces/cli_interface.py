@@ -197,14 +197,18 @@ def search_keywords(
         if total_results > 0:
             with console.status(f"[bold green]結果をエクスポート中... ({output_format}形式)[/]") as status:
                 try:
-                    output_path = exporter.export_results(
+                    result = exporter.export_results(
                         job_id=job_id,
                         output_format=output_format,
                         output_path=output_file
                     )
                     
-                    if output_path:
-                        console.print(f"[bold green]エクスポート成功:[/] {output_path}")
+                    if result:
+                        if result["is_empty"]:
+                            console.print(f"[bold yellow]警告:[/] エクスポートは成功しましたが、データが空です。")
+                            console.print(f"[bold yellow]出力ファイル:[/] {result['path']}")
+                        else:
+                            console.print(f"[bold green]エクスポート成功:[/] {result['path']} ({result['count']}件のレコード)")
                     else:
                         console.print("[bold yellow]警告:[/] エクスポートに失敗しました。")
                         

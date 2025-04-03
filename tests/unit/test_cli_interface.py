@@ -89,7 +89,12 @@ def mock_scraper():
 def mock_exporter():
     """データエクスポーターのモック"""
     mock_exp = MagicMock()
-    mock_exp.export_results.return_value = "/mock/path/output.csv"
+    # 戻り値を辞書形式に変更
+    mock_exp.export_results.return_value = {
+        "path": "/mock/path/output.csv", 
+        "is_empty": False, 
+        "count": 10
+    }
     
     # DataExporterのインスタンス化をモック
     with patch('services.data_exporter.DataExporter', return_value=mock_exp):
@@ -191,6 +196,7 @@ def test_search_keywords(mock_config, mock_logger, mock_db, mock_keyword_manager
     mock_scraper.search_keyword.assert_called_once()
     mock_exporter.export_results.assert_called_once()
     assert "エクスポート成功" in result.stdout
+    assert "10件のレコード" in result.stdout
 
 def test_search_keywords_with_login(mock_config, mock_logger, mock_db, mock_keyword_manager, mock_scraper, mock_exporter):
     """ログイン付きキーワード検索テスト"""

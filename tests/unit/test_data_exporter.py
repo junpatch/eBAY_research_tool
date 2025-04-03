@@ -84,7 +84,11 @@ def test_export_results(data_exporter, mock_db):
                     output_path=str(path),
                     results=data
                 )
-                assert result == str(path)
+                # 戻り値が辞書であることを確認
+                assert isinstance(result, dict)
+                assert result["path"] == str(path)
+                assert result["is_empty"] is False
+                assert result["count"] == len(data)
                 assert os.path.exists(path)
                 
                 # ファイル内容の検証
@@ -111,7 +115,11 @@ def test_export_results(data_exporter, mock_db):
                     results=data
                 )
                 expected_url = "https://docs.google.com/spreadsheets/d/test_spreadsheet_id"
-                assert result == expected_url
+                # 戻り値が辞書であることを確認
+                assert isinstance(result, dict)
+                assert result["path"] == expected_url
+                assert result["is_empty"] is False
+                assert result["count"] == len(data)
 
             # ケース3: keyword_idまたはjob_idを使用したテスト
             id_test_cases = [
@@ -129,7 +137,9 @@ def test_export_results(data_exporter, mock_db):
                 }
                 
                 result = data_exporter.export_results(**params)
-                assert result == params["output_path"]
+                # 戻り値が辞書であることを確認
+                assert isinstance(result, dict)
+                assert result["path"] == params["output_path"]
                 
                 # get_results_from_dbの呼び出しパラメータを検証
                 keyword_id = param_value if param_name == "keyword_id" else None
@@ -160,13 +170,17 @@ def test_export_results(data_exporter, mock_db):
                     
                     # 各エクスポートメソッドをモック化してファイルパスをキャプチャ
                     with patch.object(data_exporter, f'export_to_{format_type}', return_value=f"mocked_{format_type}_path") as mock_export:
-                        data_exporter.export_results(
+                        result = data_exporter.export_results(
                             output_format=format_type,
                             keyword_id=keyword_id,
                             job_id=job_id,
                             results=data,
                             output_path=None  # 自動生成させる
                         )
+                        
+                        # 戻り値が辞書であることを確認
+                        assert isinstance(result, dict)
+                        assert result["path"] == f"mocked_{format_type}_path"
                         
                         mock_export.assert_called_once()
                         file_path = mock_export.call_args[0][1]  # 第2引数がファイルパス
@@ -185,11 +199,15 @@ def test_export_results(data_exporter, mock_db):
                 mock_datetime.now.return_value.strftime.return_value = mock_timestamp
                 
                 with patch.object(data_exporter, 'export_to_google_sheets', return_value="mocked_sheets_url") as mock_export_sheets:
-                    data_exporter.export_results(
+                    result = data_exporter.export_results(
                         output_format="google_sheets",
                         results=data,
                         output_path=None  # 自動生成させる
                     )
+                    
+                    # 戻り値が辞書であることを確認
+                    assert isinstance(result, dict)
+                    assert result["path"] == "mocked_sheets_url"
                     
                     mock_export_sheets.assert_called_once()
                     title = mock_export_sheets.call_args[0][1]  # 第2引数がタイトル
@@ -205,6 +223,8 @@ def test_export_results(data_exporter, mock_db):
                 results=data
             )
             assert result is not None
+            # 戻り値が辞書であることを確認
+            assert isinstance(result, dict)
             # デフォルト形式（mockなので常に'csv'）でエクスポートされたことを確認
 
             # ケース7: formatが無効の場合
@@ -214,15 +234,28 @@ def test_export_results(data_exporter, mock_db):
                 results=data
             )
             assert result is None
+            
+            # ケース8: 空のデータセットの場合のテスト
+            with patch.object(data_exporter, 'export_to_csv', return_value=str(tmp_path / "empty_export.csv")) as mock_export:
+                result = data_exporter.export_results(
+                    output_format="csv",
+                    output_path=str(tmp_path / "empty_export.csv"),
+                    results=[]  # 空のデータ
+                )
+                
+                # 戻り値が辞書であることを確認
+                assert isinstance(result, dict)
+                assert result["path"] == str(tmp_path / "empty_export.csv")
+                assert result["is_empty"] is True  # 空のデータセットであることがフラグ付けされている
+                assert result["count"] == 0
 
 def test_export_results_error_handling(data_exporter, mock_db):
     """export_resultsのエラーハンドリングをテストします"""
 
     # データ取得エラー
-    mock_db.get_search_results.side_effect = Exception("Database error")
-    result = data_exporter.export_results(output_format="csv")
-    assert result is None
-    mock_db.get_search_results.side_effect = None
+    with patch.object(data_exporter, '_get_results_from_db', side_effect=Exception("Database error")):
+        result = data_exporter.export_results(output_format="csv")
+        assert result is None
 
     # 無効なファイルパス（CSVの場合）
     result = data_exporter.export_results(output_format="csv", output_path="")
@@ -242,9 +275,15 @@ def test_export_results_error_handling(data_exporter, mock_db):
         )
         assert result is None
 
-    # resultsがNoneで、keyword_idもjob_idも指定されていない場合
-    result = data_exporter.export_results(output_format="csv")
-    assert result is None
+    # 空のデータセットのテスト
+    # export_to_csvをモックして成功を模擬
+    with patch.object(data_exporter, '_get_results_from_db', return_value=[]) as mock_get_results:
+        with patch.object(data_exporter, 'export_to_csv', return_value="/mock/path/test.csv") as mock_export:
+            # 空のデータセットの場合でもエクスポートはできるようになった
+            result = data_exporter.export_results(output_format="csv")
+            assert isinstance(result, dict)
+            assert result["is_empty"] is True
+            assert result["count"] == 0
 
 def test_export_to_csv(data_exporter, mock_db, tmp_path):
     """CSVエクスポート機能をテストします"""
@@ -265,14 +304,16 @@ def test_export_to_csv(data_exporter, mock_db, tmp_path):
     assert not exported_data.empty
     assert all(col in exported_data.columns for col in ['title', 'price', 'condition', 'shipping', 'location', 'seller'])
 
-    # Noneデータの場合のテスト
+    # Noneデータの場合のテスト - 空のCSVファイルが作成され、パスが返される
     output_path = data_exporter.export_to_csv(None, export_path)
-    assert output_path is None  # Noneが返されることを確認
+    assert output_path == str(export_path)  # 空のファイルでもパスが返されることを確認
+    assert os.path.exists(export_path)  # ファイルが作成されていることを確認
     
-    # 空のDataFrameの場合のテスト
+    # 空のDataFrameの場合のテスト - 空のCSVファイルが作成され、パスが返される
     empty_df = pd.DataFrame()
     output_path = data_exporter.export_to_csv(empty_df, export_path)
-    assert output_path is None  # Noneが返されることを確認
+    assert output_path == str(export_path)  # 空のファイルでもパスが返されることを確認
+    assert os.path.exists(export_path)  # ファイルが作成されていることを確認
 
     # 無効なファイルパス
     result = data_exporter.export_to_csv(data, "")
@@ -297,14 +338,16 @@ def test_export_to_excel(data_exporter, mock_db, tmp_path):
     assert not exported_data.empty
     assert all(col in exported_data.columns for col in ['title', 'price', 'condition', 'shipping', 'location', 'seller'])
 
-    # Noneデータの場合のテスト
+    # Noneデータの場合のテスト - 空のExcelファイルが作成され、パスが返される
     output_path = data_exporter.export_to_excel(None, export_path)
-    assert output_path is None  # Noneが返されることを確認
+    assert output_path == str(export_path)  # 空のファイルでもパスが返されることを確認
+    assert os.path.exists(export_path)  # ファイルが作成されていることを確認
     
-    # 空のDataFrameの場合のテスト
+    # 空のDataFrameの場合のテスト - 空のExcelファイルが作成され、パスが返される
     empty_df = pd.DataFrame()
     output_path = data_exporter.export_to_excel(empty_df, export_path)
-    assert output_path is None  # Noneが返されることを確認
+    assert output_path == str(export_path)  # 空のファイルでもパスが返されることを確認
+    assert os.path.exists(export_path)  # ファイルが作成されていることを確認
     
     # 無効なファイルパス
     result = data_exporter.export_to_excel(data, "")
