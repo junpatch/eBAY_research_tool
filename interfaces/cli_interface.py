@@ -233,33 +233,35 @@ def show_statistics():
     table.add_column("値", justify="right", style="green")
     
     # キーワード情報
-    table.add_row("キーワード", "総数", str(stats['total_keywords']))
-    table.add_row("キーワード", "検索済み", str(stats['searched_keywords']))
+    table.add_row("キーワード", "総数", str(stats.get('total_keywords', 0)))
+    table.add_row("キーワード", "検索済み", str(stats.get('searched_keywords', 0)))
     
     # 検索結果情報
-    table.add_row("検索結果", "総数", str(stats['total_results']))
-    table.add_row("検索結果", "平均/キーワード", str(stats['avg_results_per_keyword']))
+    table.add_row("検索結果", "総数", str(stats.get('total_results', 0)))
+    table.add_row("検索結果", "平均/キーワード", f"{stats.get('avg_results_per_keyword', 0):.1f}")
     
     # 価格情報
-    if stats['price_stats']['min'] is not None:
-        table.add_row("価格", "最低価格", f"${stats['price_stats']['min']:.2f}")
-    if stats['price_stats']['max'] is not None:
-        table.add_row("価格", "最高価格", f"${stats['price_stats']['max']:.2f}")
-    if stats['price_stats']['avg'] is not None:
-        table.add_row("価格", "平均価格", f"${stats['price_stats']['avg']:.2f}")
+    price_stats = stats.get('price_stats', {})
+    if price_stats.get('min') is not None:
+        table.add_row("価格", "最低価格", f"${float(price_stats['min']):.2f}")
+    if price_stats.get('max') is not None:
+        table.add_row("価格", "最高価格", f"${float(price_stats['max']):.2f}")
+    if price_stats.get('avg') is not None:
+        table.add_row("価格", "平均価格", f"${float(price_stats['avg']):.2f}")
     
     # 最終検索日時
-    if stats['last_search']:
-        table.add_row("検索", "最終検索日時", stats['last_search'])
+    if stats.get('last_search'):
+        table.add_row("検索", "最終検索日時", str(stats['last_search']))
     
     # トップセラー情報
-    if stats['top_sellers']:
-        for i, seller in enumerate(stats['top_sellers'], 1):
+    top_sellers = stats.get('top_sellers', [])
+    if top_sellers:
+        for i, seller in enumerate(top_sellers, 1):
             if i <= 3:  # 上位3名のみ表示
-                table.add_row("トップセラー", f"#{i}", f"{seller['seller_name']} ({seller['count']}件)")
+                table.add_row("トップセラー", f"#{i}", f"{seller.get('seller_name', '')} ({seller.get('count', 0)}件)")
     
     console.print(table)
-    console.print("[bold blue]統計情報の表示が完了しました[/]")
+    console.print("[bold green]データベース統計の表示が完了しました[/]")
 
 @app.command("list-keywords")
 def list_keywords(
@@ -281,7 +283,7 @@ def list_keywords(
         keywords = db.get_keywords(status=status, limit=limit)
     
     if not keywords:
-        console.print(f"[bold yellow]該当するキーワードがありません。(ステータス: {status})[/]")
+        console.print("[bold yellow]該当するキーワードがありません[/]")
         return
         
     # 表の作成と表示
@@ -296,9 +298,9 @@ def list_keywords(
         last_searched = keyword.last_searched_at.strftime("%Y-%m-%d %H:%M") if keyword.last_searched_at else "未検索"
         table.add_row(
             str(keyword.id),
-            keyword.keyword,
-            keyword.category or "-",
-            keyword.status,
+            str(keyword.keyword),
+            str(keyword.category or "-"),
+            str(keyword.status),
             last_searched
         )
         
@@ -326,11 +328,11 @@ def clean_database(
         # データをクリーンアップ
         result = db.clean_database()
         
-        console.print("[bold green]データベースをクリーンアップしました。[/]")
-        console.print(f"  • キーワード: {result['keywords']}件")
-        console.print(f"  • 検索結果: {result['search_results']}件")
-        console.print(f"  • 検索履歴: {result['search_history']}件")
-        console.print(f"  • エクスポート履歴: {result['export_history']}件")
+        console.print("[bold green]データベースを初期化しました[/]")
+        console.print(f"  • キーワード: {str(result.get('keywords', 0))}件")
+        console.print(f"  • 検索結果: {str(result.get('search_results', 0))}件")
+        console.print(f"  • 検索履歴: {str(result.get('search_history', 0))}件")
+        console.print(f"  • エクスポート履歴: {str(result.get('export_history', 0))}件")
 
 def main():
     app()

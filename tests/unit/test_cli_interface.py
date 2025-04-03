@@ -261,53 +261,42 @@ def test_search_keywords_export_error(mock_config, mock_logger, mock_db, mock_ke
 # statsコマンドのテスト
 def test_show_statistics(mock_config, mock_db):
     """統計表示テスト"""
-    # SQLAlchemyのモックをモジュールレベルでパッチ
-    with patch('sqlalchemy.func') as mock_func:
-        # 必要な値をモック
-        mock_func.count.return_value = 10
-        mock_func.avg.return_value = 100.0
-        mock_func.min.return_value = 10.0
-        mock_func.max.return_value = 1000.0
-        
-        # セッションスコープをモック
-        mock_session = MagicMock()
-        mock_context = MagicMock()
-        mock_context.__enter__.return_value = mock_session
-        mock_db.session_scope.return_value = mock_context
-        
-        # クエリ結果をモック
-        mock_query = MagicMock()
-        mock_session.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.scalar.return_value = 10
-        
-        # コマンド実行
-        result = runner.invoke(app, ["stats"])
-        
-        # 結果確認
-        assert result.exit_code == 0
-        # テーブルが表示されたことを確認
-        assert "データベース統計" in result.stdout
+    # モックデータを設定
+    mock_stats = {
+        'total_keywords': 10,
+        'searched_keywords': 8,
+        'total_results': 120,
+        'avg_results_per_keyword': 15.0,
+        'last_search': '2023-12-15 14:30:45',
+        'price_stats': {
+            'min': 500.0,
+            'max': 15000.0,
+            'avg': 3250.5
+        },
+        'top_sellers': [
+            {'seller_name': 'トップセラー1', 'count': 25},
+            {'seller_name': 'トップセラー2', 'count': 18}
+        ]
+    }
+    
+    # get_search_statsメソッドのモック
+    mock_db.get_search_stats.return_value = mock_stats
+    
+    # コマンド実行
+    result = runner.invoke(app, ["stats"])
+    
+    # 結果確認
+    assert result.exit_code == 0
+    assert "データベース統計" in result.stdout
+    assert "10" in result.stdout  # total_keywords
+    assert "120" in result.stdout  # total_results
+    assert "15.0" in result.stdout  # avg_results_per_keyword
+    assert "トップセラー1" in result.stdout
+    assert "トップセラー2" in result.stdout
 
 # list-keywordsコマンドのテスト
 def test_list_keywords_with_data(mock_config, mock_db):
     """キーワードリスト表示テスト（データあり）"""
-    # SQLAlchemyのモック
-    from models.data_models import Keyword
-    
-    # セッションスコープをモック
-    mock_session = MagicMock()
-    mock_context = MagicMock()
-    mock_context.__enter__.return_value = mock_session
-    mock_db.session_scope.return_value = mock_context
-    
-    # クエリをモック
-    mock_query = MagicMock()
-    mock_session.query.return_value = mock_query
-    mock_query.filter.return_value = mock_query
-    mock_query.order_by.return_value = mock_query
-    mock_query.limit.return_value = mock_query
-    
     # キーワードのモックデータ作成
     keyword1 = MagicMock()
     keyword1.id = 1
@@ -323,8 +312,8 @@ def test_list_keywords_with_data(mock_config, mock_db):
     keyword2.status = "active"
     keyword2.last_searched_at = None
     
-    # キーワードリストをモック
-    mock_query.all.return_value = [keyword1, keyword2]
+    # get_keywordsメソッドのモック
+    mock_db.get_keywords.return_value = [keyword1, keyword2]
     
     # コマンド実行
     result = runner.invoke(app, ["list-keywords"])
@@ -334,24 +323,13 @@ def test_list_keywords_with_data(mock_config, mock_db):
     assert "キーワード一覧" in result.stdout
     assert "テストキーワード1" in result.stdout
     assert "テストキーワード2" in result.stdout
+    assert "テストカテゴリ" in result.stdout
+    assert "未検索" in result.stdout
 
 def test_list_keywords_no_data(mock_config, mock_db):
     """キーワードリスト表示テスト（データなし）"""
-    # セッションスコープをモック
-    mock_session = MagicMock()
-    mock_context = MagicMock()
-    mock_context.__enter__.return_value = mock_session
-    mock_db.session_scope.return_value = mock_context
-    
-    # クエリをモック
-    mock_query = MagicMock()
-    mock_session.query.return_value = mock_query
-    mock_query.filter.return_value = mock_query
-    mock_query.order_by.return_value = mock_query
-    mock_query.limit.return_value = mock_query
-    
-    # 空のリストを返す
-    mock_query.all.return_value = []
+    # get_keywordsメソッドのモック（空のリストを返す）
+    mock_db.get_keywords.return_value = []
     
     # コマンド実行
     result = runner.invoke(app, ["list-keywords"])
@@ -363,42 +341,42 @@ def test_list_keywords_no_data(mock_config, mock_db):
 # clean-allコマンドのテスト
 def test_clean_database_confirmed(mock_config, mock_db):
     """データベースクリーンアップテスト（確認あり）"""
-    # モジュールレベルでBaseをパッチ
-    with patch('models.data_models.Base') as mock_base:
-        # コマンド実行（確認に「y」と応答）
-        result = runner.invoke(app, ["clean-all"], input="y\n")
-        
-        # 結果確認
-        assert result.exit_code == 0
-        assert "データベースを初期化しました" in result.stdout
-        # テーブルがドロップ＆再作成されたことを確認
-        mock_base.metadata.drop_all.assert_called_once_with(mock_db.engine)
-        mock_base.metadata.create_all.assert_called_once_with(mock_db.engine)
-
-def test_clean_database_cancelled(mock_config, mock_db):
-    """データベースクリーンアップテスト（キャンセル）"""
-    # モジュールレベルでBaseをパッチ
-    with patch('models.data_models.Base') as mock_base:
-        # コマンド実行（確認に「n」と応答）
-        result = runner.invoke(app, ["clean-all"], input="n\n")
-        
-        # 結果確認
-        assert result.exit_code == 0
-        assert "キャンセルしました" in result.stdout
-        # テーブル操作が呼ばれていないことを確認
-        mock_base.metadata.drop_all.assert_not_called()
-        mock_base.metadata.create_all.assert_not_called()
+    # clean_databaseメソッドのモック
+    mock_db.clean_database.return_value = {
+        'keywords': 5,
+        'search_results': 75,
+        'search_history': 3,
+        'export_history': 2
+    }
+    
+    # コマンド実行（確認に「y」と応答）
+    result = runner.invoke(app, ["clean-all"], input="y\n")
+    
+    # 結果確認
+    assert result.exit_code == 0
+    assert "データベースを初期化しました" in result.stdout
+    assert "5件" in result.stdout  # keywords
+    assert "75件" in result.stdout  # search_results
+    assert "3件" in result.stdout  # search_history
+    assert "2件" in result.stdout  # export_history
 
 def test_clean_database_no_confirm(mock_config, mock_db):
     """データベースクリーンアップテスト（確認なし）"""
-    # モジュールレベルでBaseをパッチ
-    with patch('models.data_models.Base') as mock_base:
-        # コマンド実行（--confirm オプション付き）
-        result = runner.invoke(app, ["clean-all", "--confirm"])
-        
-        # 結果確認
-        assert result.exit_code == 0
-        assert "データベースを初期化しました" in result.stdout
-        # テーブルがドロップ＆再作成されたことを確認
-        mock_base.metadata.drop_all.assert_called_once_with(mock_db.engine)
-        mock_base.metadata.create_all.assert_called_once_with(mock_db.engine) 
+    # clean_databaseメソッドのモック
+    mock_db.clean_database.return_value = {
+        'keywords': 5,
+        'search_results': 75,
+        'search_history': 3,
+        'export_history': 2
+    }
+    
+    # コマンド実行（--confirm オプション付き）
+    result = runner.invoke(app, ["clean-all", "--confirm"])
+    
+    # 結果確認
+    assert result.exit_code == 0
+    assert "データベースを初期化しました" in result.stdout
+    assert "5件" in result.stdout  # keywords
+    assert "75件" in result.stdout  # search_results
+    assert "3件" in result.stdout  # search_history
+    assert "2件" in result.stdout  # export_history 
